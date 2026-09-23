@@ -44,3 +44,11 @@ Abra uma compra e clique em **Imprimir contrato**. No navegador, escolha **Salva
 ## Identidade
 
 A logo usada no sistema foi extraída do manual visual BRACOFFEE fornecido para o projeto.
+
+
+## Acesso inicial
+
+- Usuário: `admin`
+- Senha: `Bracoffee@2026`
+
+Nesta versão estática, o login funciona como bloqueio da interface no navegador. Para autenticação de produção com segurança de servidor, use backend/banco de dados.

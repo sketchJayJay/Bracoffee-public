@@ -148,3 +148,23 @@ button:disabled{opacity:.45;cursor:not-allowed}
 }
 @media(max-width:560px){.topbar-actions #quickBuyBtn{display:none}.hero-card h2{font-size:23px}.stats-grid,.stats-grid.compact{grid-template-columns:1fr}.form-grid.cols-2,.form-grid.cols-3{grid-template-columns:1fr}.span-2,.span-3,.form-grid.cols-3 .span-3{grid-column:span 1}.row-mobile-stack{flex-direction:column}.toolbar{flex-direction:column}.toolbar select{width:100%}.search-box.small{max-width:none}.data-card{grid-template-columns:1fr}.data-card .main-info,.data-card .card-actions{grid-column:span 1}.detail-grid{grid-template-columns:1fr}.detail-box.span-2{grid-column:span 1}.sticky-form-actions{justify-content:space-between}.sticky-form-actions .ghost-btn{padding-inline:11px}.modal-actions{justify-content:stretch}.modal-actions button{flex:1}.inline-actions{flex-wrap:wrap}.inline-actions button{flex:1}}
 @media print{body{background:#fff}.sidebar,.topbar,.mobile-nav,.sticky-form-actions{display:none!important}.main{padding:0}.page{display:block!important}}
+
+
+/* Login */
+body.auth-locked{overflow:hidden}
+body.auth-locked .app-shell,body.auth-locked .mobile-nav{display:none!important}
+.login-screen{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:22px;background:radial-gradient(circle at 20% 10%,rgba(217,193,151,.18),transparent 34%),linear-gradient(145deg,#1d1916 0%,#2b211a 56%,#4a3323 100%)}
+body:not(.auth-locked) .login-screen{display:none}
+.login-card{width:min(430px,100%);background:rgba(255,253,250,.98);border:1px solid rgba(255,255,255,.16);border-radius:28px;padding:30px;box-shadow:0 30px 90px rgba(0,0,0,.3)}
+.login-brand{text-align:center;margin-bottom:24px}
+.login-logo{width:min(270px,82%);height:auto;display:block;margin:0 auto 12px}
+.login-brand p{margin:0;color:var(--muted);font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.login-form{display:flex;flex-direction:column;gap:15px}
+.login-password-wrap{position:relative}
+.login-password-wrap input{padding-right:82px!important}
+.show-password-btn{position:absolute;right:7px;top:50%;transform:translateY(-50%);border:0;background:#f1e8dc;color:#6b4d31;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:900}
+.login-error{background:var(--red-bg);color:var(--red);border:1px solid #f0c9c4;border-radius:11px;padding:10px 12px;font-size:12px;font-weight:800}
+.login-submit{width:100%;padding:13px 16px;margin-top:2px}
+.login-help{display:block;text-align:center;color:#9a8e83;margin-top:18px}
+.logout-btn{white-space:nowrap}
+@media(max-width:560px){.login-card{padding:24px 20px;border-radius:22px}.login-logo{width:min(230px,78%)}.topbar .logout-btn{padding:8px 10px;font-size:12px}}

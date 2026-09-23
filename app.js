@@ -2,6 +2,9 @@
   'use strict';
 
   const STORAGE_KEY = 'bracoffee_db_v1';
+  const AUTH_SESSION_KEY = 'bracoffee_auth_v1';
+  const AUTH_USER = 'admin';
+  const AUTH_PASSWORD = 'Bracoffee@2026';
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
@@ -62,6 +65,56 @@
   };
   const esc = (value = '') => String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const normalize = (s = '') => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+  function isAuthenticated() {
+    return sessionStorage.getItem(AUTH_SESSION_KEY) === '1';
+  }
+
+  function unlockApp() {
+    document.body.classList.remove('auth-locked');
+    sessionStorage.setItem(AUTH_SESSION_KEY, '1');
+    setTimeout(() => $('#loginUser')?.blur(), 0);
+  }
+
+  function lockApp() {
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    document.body.classList.add('auth-locked');
+    const form = $('#loginForm');
+    if (form) form.reset();
+    const err = $('#loginError');
+    if (err) err.hidden = true;
+    setTimeout(() => $('#loginUser')?.focus(), 80);
+  }
+
+  function bindAuth() {
+    $('#loginForm')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const user = $('#loginUser').value.trim();
+      const password = $('#loginPassword').value;
+      const err = $('#loginError');
+      if (user === AUTH_USER && password === AUTH_PASSWORD) {
+        err.hidden = true;
+        unlockApp();
+        toast('Acesso liberado', 'Bem-vindo à BRACOFFEE.');
+      } else {
+        err.hidden = false;
+        $('#loginPassword').value = '';
+        $('#loginPassword').focus();
+      }
+    });
+
+    $('#togglePasswordBtn')?.addEventListener('click', () => {
+      const input = $('#loginPassword');
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      $('#togglePasswordBtn').textContent = show ? 'Ocultar' : 'Mostrar';
+      $('#togglePasswordBtn').setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
+    });
+
+    $('#logoutBtn')?.addEventListener('click', () => {
+      lockApp();
+    });
+  }
 
   function toast(title, detail = '', type = 'success') {
     const el = document.createElement('div');
@@ -540,7 +593,15 @@
 
   function init(){
     $('#purchaseDate').value=todayISO();
-    bindEvents(); renderAll();
+    bindAuth();
+    bindEvents();
+    renderAll();
+    if (isAuthenticated()) {
+      document.body.classList.remove('auth-locked');
+    } else {
+      document.body.classList.add('auth-locked');
+      setTimeout(() => $('#loginUser')?.focus(), 80);
+    }
     if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
   }
 

@@ -10,7 +10,32 @@
   <link rel="apple-touch-icon" href="assets/icon-192.png" />
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body class="auth-locked">
+  <section class="login-screen" id="loginScreen" aria-label="Acesso ao sistema">
+    <div class="login-card">
+      <div class="login-brand">
+        <img src="assets/bracoffee_logo.png" alt="BRACOFFEE" class="login-logo" />
+        <p>Acesso ao sistema</p>
+      </div>
+      <form id="loginForm" class="login-form" autocomplete="on">
+        <label class="field">
+          <span>Usuário</span>
+          <input id="loginUser" name="username" autocomplete="username" placeholder="Digite seu usuário" required />
+        </label>
+        <label class="field">
+          <span>Senha</span>
+          <div class="login-password-wrap">
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required />
+            <button type="button" class="show-password-btn" id="togglePasswordBtn" aria-label="Mostrar senha">Mostrar</button>
+          </div>
+        </label>
+        <div class="login-error" id="loginError" role="alert" hidden>Usuário ou senha incorretos.</div>
+        <button type="submit" class="primary-btn login-submit">Entrar</button>
+      </form>
+      <small class="login-help">BRACOFFEE • acesso restrito</small>
+    </div>
+  </section>
+
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand-wrap">
@@ -29,7 +54,7 @@
 
       <div class="sidebar-footer">
         <button class="ghost-btn full" id="openSettingsBtn">⚙ Configurações</button>
-        <div class="version">BRACOFFEE • v1.1</div>
+        <div class="version">BRACOFFEE • v1.2</div>
       </div>
     </aside>
 
@@ -45,6 +70,7 @@
         <div class="topbar-spacer">
           </div>
         <div class="topbar-actions">
+          <button class="ghost-btn logout-btn" id="logoutBtn">Sair</button>
           <button class="ghost-btn hide-mobile" id="exportBackupBtn">Exportar backup</button>
           <button class="primary-btn" id="quickBuyBtn">+ Nova compra</button>
         </div>
