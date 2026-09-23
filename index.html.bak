@@ -29,21 +29,16 @@
 
       <div class="sidebar-footer">
         <button class="ghost-btn full" id="openSettingsBtn">⚙ Configurações</button>
-        <div class="version">BRACOFFEE • v1.1</div>
+        <div class="version">BRACOFFEE • v1.0</div>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
-        <div class="topbar-brand">
-          <img src="assets/bracoffee_logo.png" alt="BRACOFFEE" class="topbar-brand-logo" />
-          <div class="topbar-brand-copy">
-            <p class="eyebrow" id="pageEyebrow">VISÃO GERAL</p>
-            <h1 id="pageTitle">Bom trabalho 👋</h1>
-          </div>
+        <div>
+          <p class="eyebrow" id="pageEyebrow">VISÃO GERAL</p>
+          <h1 id="pageTitle">Bom trabalho 👋</h1>
         </div>
-        <div class="topbar-spacer">
-          </div>
         <div class="topbar-actions">
           <button class="ghost-btn hide-mobile" id="exportBackupBtn">Exportar backup</button>
           <button class="primary-btn" id="quickBuyBtn">+ Nova compra</button>
