@@ -2,9 +2,6 @@
   'use strict';
 
   const STORAGE_KEY = 'bracoffee_db_v1';
-  const AUTH_SESSION_KEY = 'bracoffee_auth_v1';
-  const AUTH_USER = 'admin';
-  const AUTH_PASSWORD = 'Bracoffee@2026';
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
@@ -66,54 +63,15 @@
   const esc = (value = '') => String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const normalize = (s = '') => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
-  function isAuthenticated() {
-    return sessionStorage.getItem(AUTH_SESSION_KEY) === '1';
-  }
 
-  function unlockApp() {
-    document.body.classList.remove('auth-locked');
-    sessionStorage.setItem(AUTH_SESSION_KEY, '1');
-    setTimeout(() => $('#loginUser')?.blur(), 0);
-  }
-
-  function lockApp() {
-    sessionStorage.removeItem(AUTH_SESSION_KEY);
-    document.body.classList.add('auth-locked');
-    const form = $('#loginForm');
-    if (form) form.reset();
-    const err = $('#loginError');
-    if (err) err.hidden = true;
-    setTimeout(() => $('#loginUser')?.focus(), 80);
-  }
-
-  function bindAuth() {
-    $('#loginForm')?.addEventListener('submit', e => {
-      e.preventDefault();
-      const user = $('#loginUser').value.trim();
-      const password = $('#loginPassword').value;
-      const err = $('#loginError');
-      if (user === AUTH_USER && password === AUTH_PASSWORD) {
-        err.hidden = true;
-        unlockApp();
-        toast('Acesso liberado', 'Bem-vindo à BRACOFFEE.');
-      } else {
-        err.hidden = false;
-        $('#loginPassword').value = '';
-        $('#loginPassword').focus();
-      }
-    });
-
-    $('#togglePasswordBtn')?.addEventListener('click', () => {
-      const input = $('#loginPassword');
-      const show = input.type === 'password';
-      input.type = show ? 'text' : 'password';
-      $('#togglePasswordBtn').textContent = show ? 'Ocultar' : 'Mostrar';
-      $('#togglePasswordBtn').setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
-    });
-
-    $('#logoutBtn')?.addEventListener('click', () => {
-      lockApp();
-    });
+  async function logoutApp() {
+    try {
+      await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
+    } catch (e) {
+      console.warn('Falha ao encerrar sessão no servidor', e);
+    } finally {
+      location.replace('/login');
+    }
   }
 
   function toast(title, detail = '', type = 'success') {
@@ -553,6 +511,7 @@
   function importBackup(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const data=JSON.parse(r.result);if(!data||!Array.isArray(data.purchases)||!Array.isArray(data.stockLots))throw new Error('inválido');if(!confirm('Importar este backup? Os dados atuais serão substituídos.'))return;db={...defaultDB(),...data,settings:{...defaultDB().settings,...(data.settings||{})}};saveDB();toast('Backup importado');$('#settingsModal').close();}catch(e){toast('Arquivo inválido','Não foi possível importar este backup.','error');}};r.readAsText(file);}
 
   function bindEvents(){
+    $('#logoutBtn')?.addEventListener('click', logoutApp);
     document.addEventListener('click',e=>{
       const go=e.target.closest('[data-goto]');if(go)navigate(go.dataset.goto);
       const nav=e.target.closest('[data-page]');if(nav)navigate(nav.dataset.page);
@@ -593,16 +552,11 @@
 
   function init(){
     $('#purchaseDate').value=todayISO();
-    bindAuth();
     bindEvents();
     renderAll();
-    if (isAuthenticated()) {
-      document.body.classList.remove('auth-locked');
-    } else {
-      document.body.classList.add('auth-locked');
-      setTimeout(() => $('#loginUser')?.focus(), 80);
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister())).catch(()=>{});
     }
-    if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
   }
 
   init();
