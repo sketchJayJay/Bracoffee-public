@@ -25,12 +25,38 @@
   let db = loadDB();
   let activePurchaseId = null;
 
+  function migrateDB(data) {
+    let changed = false;
+    data.purchases = Array.isArray(data.purchases) ? data.purchases : [];
+    data.stockLots = Array.isArray(data.stockLots) ? data.stockLots : [];
+    const purchaseMap = new Map(data.purchases.map(p => [p.id, p]));
+
+    // Versões antigas criavam um lote automaticamente ao finalizar a compra.
+    // Preservamos esse registro para não apagar histórico, mas ele deixa de contar
+    // como estoque físico até que uma entrada seja feita manualmente pela OC.
+    data.stockLots.forEach(lot => {
+      if (lot.entryType) return;
+      const purchase = purchaseMap.get(lot.purchaseId);
+      if (purchase && purchase.lotId === lot.id) {
+        lot.entryType = 'legacy_auto_purchase';
+        changed = true;
+      } else {
+        lot.entryType = 'manual_oc';
+        changed = true;
+      }
+    });
+    return { data, changed };
+  }
+
   function loadDB() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return defaultDB();
       const parsed = JSON.parse(raw);
-      return { ...defaultDB(), ...parsed, settings: { ...defaultDB().settings, ...(parsed.settings || {}) } };
+      const merged = { ...defaultDB(), ...parsed, settings: { ...defaultDB().settings, ...(parsed.settings || {}) } };
+      const migrated = migrateDB(merged);
+      if (migrated.changed) localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated.data));
+      return migrated.data;
     } catch (e) {
       console.error(e);
       return defaultDB();
@@ -75,8 +101,16 @@
     return ((pricePerBag / usd / LB_PER_BAG) * 100) - ny;
   }
 
+  function isPhysicalStockLot(lot) {
+    return lot && lot.entryType !== 'legacy_auto_purchase';
+  }
+
+  function physicalStockLots() {
+    return db.stockLots.filter(isPhysicalStockLot);
+  }
+
   function receivedForPurchase(purchaseId) {
-    return db.stockLots.filter(l => l.purchaseId === purchaseId).reduce((sum,l) => sum + Number(l.bags || 0), 0);
+    return physicalStockLots().filter(l => l.purchaseId === purchaseId).reduce((sum,l) => sum + Number(l.bags || 0), 0);
   }
 
   function remainingToReceive(purchase) {
@@ -151,7 +185,7 @@
     const month = today.slice(0, 7);
     const monthPurchases = db.purchases.filter(p => p.date?.startsWith(month));
     const todayPurchases = db.purchases.filter(p => p.date === today);
-    const stock = db.stockLots.reduce((s, l) => s + Number(l.remaining || 0), 0);
+    const stock = physicalStockLots().reduce((s, l) => s + Number(l.remaining || 0), 0);
     const pending = db.finance.filter(f => f.type === 'payable' && f.status !== 'paid').reduce((s, f) => s + Math.max(0, Number(f.amount) - Number(f.paidAmount || 0)), 0);
     const monthTotal = monthPurchases.reduce((s, p) => s + Number(p.total || 0), 0);
 
@@ -177,7 +211,7 @@
 
   function stockByDrink() {
     const map = new Map();
-    db.stockLots.forEach(l => {
+    physicalStockLots().forEach(l => {
       if (Number(l.remaining || 0) <= 0) return;
       const key = l.drink || 'Sem classificação';
       map.set(key, (map.get(key) || 0) + Number(l.remaining || 0));
@@ -392,8 +426,11 @@
 
   function openPurchaseDetail(id) {
     const p=db.purchases.find(x=>x.id===id); if(!p)return; activePurchaseId=id;
-    const lots=db.stockLots.filter(l=>l.purchaseId===p.id); const received=receivedForPurchase(p.id); const remaining=remainingToReceive(p);
+    const lots=physicalStockLots().filter(l=>l.purchaseId===p.id); const received=receivedForPurchase(p.id); const remaining=remainingToReceive(p);
     const lotIds=lots.map(l=>l.id); const sales=db.sales.filter(s=>lotIds.includes(s.lotId));
+    const stockLabel = (p.destination || 'stock') === 'stock'
+      ? `${num(received)} sc recebidas${received ? ` · ${num(remaining)} sc ainda não recebidas` : ' · nenhuma entrada física registrada'}`
+      : 'Não enviado ao estoque';
     $('#detailOc').textContent=p.oc;
     $('#purchaseDetailBody').innerHTML=`
       <div class="detail-grid">
@@ -407,7 +444,7 @@
         <div class="detail-box"><label>Qualidade</label><strong>${esc(p.drink||'—')} · Cata ${p.cata?num(p.cata)+'%':'—'} · Umid. ${p.moisture?num(p.moisture)+'%':'—'}</strong></div>
         <div class="detail-box"><label>Classificação</label><strong>${esc(p.classification||'—')}</strong></div>
         <div class="detail-box"><label>Tipo da compra</label><strong>${esc(destinationLabel(p.destination))}${p.expectedReceipt?' · '+dateBR(p.expectedReceipt):''}</strong></div>
-        <div class="detail-box"><label>Estoque</label><strong>${num(received)} sc recebidas · ${num(remaining)} sc pendentes</strong></div>
+        <div class="detail-box"><label>Estoque</label><strong>${stockLabel}</strong></div>
         <div class="detail-box"><label>Pagamento</label><strong>${purchaseTermLabel(p.purchaseTerm)} · ${p.paymentStatus==='paid'?'Pago':'A pagar'} · ${esc(p.paymentMethod||'—')}</strong></div>
         <div class="detail-box"><label>Entrega / retirada</label><strong>${deliveryLabel(p.deliveryType)} · ${esc(p.deliveryLocation||'—')}</strong></div>
         <div class="detail-box span-2"><label>Observação</label><strong>${esc(p.notes||'Sem observação')}</strong></div>
@@ -444,20 +481,18 @@
   }
 
   function eligibleStockPurchases() {
-    return db.purchases.filter(p => (p.destination || 'stock') !== 'direct' && remainingToReceive(p) > 0.0001);
+    // Somente OCs explicitamente marcadas como “Para estoque” podem ser puxadas.
+    // Compra futura e venda direta ficam totalmente fora do estoque nesta etapa.
+    return db.purchases.filter(p => (p.destination || 'stock') === 'stock' && remainingToReceive(p) > 0.0001);
   }
 
   function renderStock() {
-    const total=db.stockLots.reduce((s,l)=>s+Number(l.remaining||0),0); const groups=stockByDrink(); const lotsOpen=db.stockLots.filter(l=>Number(l.remaining||0)>0).length; const pendingOCs=eligibleStockPurchases();
-    $('#stockStats').innerHTML=[['Saldo total',`${num(total)} sacas`,'Café fisicamente recebido'],['Lotes abertos',String(lotsOpen),'Com saldo disponível'],['OCs aguardando',String(pendingOCs.length),'Compras ainda não recebidas por completo']].map(([l,v,h])=>`<div class="stat-card"><div class="stat-label">${l}</div><div class="stat-value">${v}</div><div class="stat-help">${h}</div></div>`).join('');
-    $('#pendingStockPurchases').innerHTML=pendingOCs.length?pendingOCs.slice(0,8).map(p=>`<div class="data-card">
-      <div class="main-info"><strong>${esc(p.oc)} · ${esc(p.sellerName)}</strong><small>${destinationLabel(p.destination)}${p.expectedReceipt?' · previsão '+dateBR(p.expectedReceipt):''}</small></div>
-      <div class="data-meta"><label>Comprado</label><strong>${num(p.bags)} sc</strong></div><div class="data-meta"><label>Já recebido</label><strong>${num(receivedForPurchase(p.id))} sc</strong></div>
-      <div class="data-meta hide-mid"><label>Pendente</label><strong>${num(remainingToReceive(p))} sc</strong></div><div class="data-meta hide-mid"><label>Bebida</label><strong>${esc(p.drink||'—')}</strong></div>
-      <div class="card-actions"><button class="mini-btn primary" data-stock-receive="${p.id}">Receber</button><button class="mini-btn" data-purchase-open="${p.id}">Ver OC</button></div>
-    </div>`).join(''):emptyHTML('Nenhuma OC aguardando entrada','Compras marcadas como venda direta não entram no estoque.');
+    const physicalLots=physicalStockLots();
+    const total=physicalLots.reduce((s,l)=>s+Number(l.remaining||0),0); const groups=stockByDrink(); const lotsOpen=physicalLots.filter(l=>Number(l.remaining||0)>0).length;
+    const receivedEntries=physicalLots.length;
+    $('#stockStats').innerHTML=[['Saldo físico',`${num(total)} sacas`,'Somente entradas lançadas no estoque'],['Lotes físicos',String(lotsOpen),'Com saldo disponível'],['Entradas registradas',String(receivedEntries),'Lançamentos feitos por OC']].map(([l,v,h])=>`<div class="stat-card"><div class="stat-label">${l}</div><div class="stat-value">${v}</div><div class="stat-help">${h}</div></div>`).join('');
     const q=normalize($('#stockSearch')?.value||'');
-    const rows=[...db.stockLots].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).filter(l=>Number(l.remaining||0)>0&&(!q||normalize(`${l.oc} ${l.sellerName} ${l.drink} ${l.warehouse||''}`).includes(q)));
+    const rows=[...physicalLots].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).filter(l=>Number(l.remaining||0)>0&&(!q||normalize(`${l.oc} ${l.sellerName} ${l.drink} ${l.warehouse||''}`).includes(q)));
     $('#stockLots').innerHTML=rows.length?rows.map(l=>`<div class="data-card">
       <div class="main-info"><strong>${esc(l.oc)} · ${esc(l.sellerName)}</strong><small>Entrada ${dateBR(l.date)}${l.warehouse?' · '+esc(l.warehouse):''}</small></div>
       <div class="data-meta"><label>Saldo</label><strong>${num(l.remaining)} sc</strong></div><div class="data-meta"><label>Bebida</label><strong>${esc(l.drink)}</strong></div>
@@ -468,8 +503,12 @@
 
   function openStockEntryModal(purchaseId='') {
     const eligible=eligibleStockPurchases();
+    if (!eligible.length) {
+      toast('Nenhuma OC disponível','Marque a compra como “Para estoque” antes de puxá-la para o estoque.','error');
+      return;
+    }
     const select=$('#stockEntryPurchaseId');
-    select.innerHTML=`<option value="">Selecione uma OC</option>`+eligible.map(p=>`<option value="${p.id}">${esc(p.oc)} · ${esc(p.sellerName)} · pendente ${num(remainingToReceive(p))} sc</option>`).join('');
+    select.innerHTML=`<option value="">Selecione uma OC</option>`+eligible.map(p=>`<option value="${p.id}">${esc(p.oc)} · ${esc(p.sellerName)} · ${num(remainingToReceive(p))} sc disponíveis para entrada</option>`).join('');
     select.value=purchaseId && eligible.some(p=>p.id===purchaseId)?purchaseId:''; $('#stockEntryDate').value=todayISO(); $('#stockEntryBags').value=''; $('#stockEntryWeight').value=''; $('#stockEntryWarehouse').value=''; $('#stockEntryNotes').value='';
     updateStockEntrySummary(); $('#stockEntryModal').showModal();
   }
@@ -483,10 +522,11 @@
 
   function saveStockEntry() {
     const p=db.purchases.find(x=>x.id===$('#stockEntryPurchaseId').value); if(!p){toast('Selecione uma OC','','error');return;}
+    if ((p.destination || 'stock') !== 'stock') { toast('OC fora do estoque','Somente compras marcadas como “Para estoque” podem gerar entrada física.','error'); return; }
     const bags=Number($('#stockEntryBags').value||0), pending=remainingToReceive(p);
     if(bags<=0||bags>pending+0.0001){toast('Quantidade inválida',`Ainda faltam receber ${num(pending)} sacas.`,'error');return;}
     const weight=Number($('#stockEntryWeight').value||bags*60);
-    const lot={id:uid('lot'),purchaseId:p.id,oc:p.oc,sellerName:p.sellerName,bags,remaining:bags,weight,drink:p.drink,cata:p.cata,moisture:p.moisture,classification:p.classification,date:$('#stockEntryDate').value||todayISO(),warehouse:$('#stockEntryWarehouse').value.trim(),notes:$('#stockEntryNotes').value.trim(),createdAt:new Date().toISOString()};
+    const lot={id:uid('lot'),entryType:'manual_oc',purchaseId:p.id,oc:p.oc,sellerName:p.sellerName,bags,remaining:bags,weight,drink:p.drink,cata:p.cata,moisture:p.moisture,classification:p.classification,date:$('#stockEntryDate').value||todayISO(),warehouse:$('#stockEntryWarehouse').value.trim(),notes:$('#stockEntryNotes').value.trim(),createdAt:new Date().toISOString()};
     db.stockLots.push(lot); saveDB(); $('#stockEntryModal').close(); toast('Entrada confirmada',`${num(bags)} sacas recebidas da ${p.oc}.`);
   }
 

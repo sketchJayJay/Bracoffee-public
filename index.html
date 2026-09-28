@@ -29,7 +29,7 @@
 
       <div class="sidebar-footer">
         <button class="ghost-btn full" id="openSettingsBtn">⚙ Configurações</button>
-        <div class="version">BRACOFFEE • v1.4</div>
+        <div class="version">BRACOFFEE • v1.5</div>
       </div>
     </aside>
 
@@ -190,16 +190,12 @@
 
       <section class="page" id="page-estoque">
         <div class="section-intro row-mobile-stack">
-          <div><p class="eyebrow">SALDO</p><h2>Estoque</h2><p>A compra não entra aqui sozinha. Você puxa a OC quando o café realmente chegar.</p></div>
-          <button class="primary-btn" id="newStockEntryBtn">+ Entrada por OC</button>
+          <div><p class="eyebrow">SALDO FÍSICO</p><h2>Estoque</h2><p>Compra e estoque são separados. Só entra aqui o café que você lançar manualmente a partir de uma OC marcada como “Para estoque”.</p></div>
+          <button class="primary-btn" id="newStockEntryBtn">+ Puxar OC para estoque</button>
         </div>
         <div class="stats-grid compact" id="stockStats"></div>
-        <div class="panel">
-          <div class="panel-head"><div><p class="eyebrow">AGUARDANDO ENTRADA</p><h3>OCs disponíveis para receber</h3></div></div>
-          <div id="pendingStockPurchases" class="cards-list"></div>
-        </div>
         <div class="panel stock-panel-gap">
-          <div class="panel-head"><div><p class="eyebrow">LOTES</p><h3>Cafés disponíveis</h3></div><div class="search-box small">⌕ <input id="stockSearch" placeholder="Buscar lote, OC, produtor ou bebida" /></div></div>
+          <div class="panel-head"><div><p class="eyebrow">LOTES FÍSICOS</p><h3>Cafés realmente recebidos</h3></div><div class="search-box small">⌕ <input id="stockSearch" placeholder="Buscar lote, OC, produtor ou bebida" /></div></div>
           <div id="stockLots" class="cards-list"></div>
         </div>
       </section>
@@ -281,9 +277,9 @@
 
   <dialog class="modal" id="stockEntryModal">
     <form method="dialog" id="stockEntryForm">
-      <div class="modal-head"><div><p class="eyebrow">ENTRADA DE ESTOQUE</p><h3>Receber café de uma OC</h3></div><button type="button" class="icon-btn" data-close-dialog="stockEntryModal">×</button></div>
+      <div class="modal-head"><div><p class="eyebrow">ENTRADA DE ESTOQUE</p><h3>Puxar OC para o estoque</h3></div><button type="button" class="icon-btn" data-close-dialog="stockEntryModal">×</button></div>
       <div class="form-grid cols-2">
-        <label class="field span-2"><span>Ordem de compra *</span><select id="stockEntryPurchaseId" required></select></label>
+        <label class="field span-2"><span>Ordem de compra marcada como “Para estoque” *</span><select id="stockEntryPurchaseId" required></select></label>
         <div class="lot-highlight span-2" id="stockEntrySummary">Selecione uma OC.</div>
         <label class="field"><span>Sacas recebidas *</span><input id="stockEntryBags" type="number" min="0.01" step="0.01" required /></label>
         <label class="field"><span>Peso recebido (kg)</span><input id="stockEntryWeight" type="number" min="0" step="0.01" placeholder="Calculado por 60 kg/saca" /></label>
