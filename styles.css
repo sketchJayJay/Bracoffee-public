@@ -168,3 +168,13 @@ body:not(.auth-locked) .login-screen{display:none}
 .login-help{display:block;text-align:center;color:#9a8e83;margin-top:18px}
 .logout-btn{white-space:nowrap}
 @media(max-width:560px){.login-card{padding:24px 20px;border-radius:22px}.login-logo{width:min(230px,78%)}.topbar .logout-btn{padding:8px 10px;font-size:12px}}
+
+/* v1.4 - compra separada do estoque */
+.form-subtitle{margin:20px 0 12px;padding-top:16px;border-top:1px solid var(--line);font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--brown)}
+.field-help{display:block;margin-top:2px;color:var(--muted);font-size:10px;font-weight:600;line-height:1.35}
+.computed-value.positive{background:#e9f5ef;border-color:#cde8da;color:#2f7a56}
+.computed-value.negative{background:#fcebe8;border-color:#f1d0ca;color:#a5483f}
+.stock-panel-gap{margin-top:16px}
+#pendingStockPurchases .data-card{grid-template-columns:minmax(190px,1.3fr) repeat(3,minmax(100px,.7fr)) auto}
+@media(max-width:820px){#pendingStockPurchases .data-card{grid-template-columns:1fr 1fr}#pendingStockPurchases .data-card .main-info,#pendingStockPurchases .data-card .card-actions{grid-column:span 2}}
+@media(max-width:560px){#pendingStockPurchases .data-card{grid-template-columns:1fr}#pendingStockPurchases .data-card .main-info,#pendingStockPurchases .data-card .card-actions{grid-column:span 1}}

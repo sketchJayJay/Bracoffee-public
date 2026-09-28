@@ -6,15 +6,15 @@
   <meta name="theme-color" content="#8a6035" />
   <title>BRACOFFEE | Gestão de Café</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="icon" href="assets/icon-192.png" />
-  <link rel="apple-touch-icon" href="assets/icon-192.png" />
+  <link rel="icon" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand-wrap">
-        <img src="assets/bracoffee_logo.png" alt="BRACOFFEE" class="brand-logo" />
+        <img src="bracoffee_logo.png" alt="BRACOFFEE" class="brand-logo" />
       </div>
 
       <nav class="nav" aria-label="Navegação principal">
@@ -24,19 +24,19 @@
         <button class="nav-item" data-page="compras"><span class="nav-icon">▤</span><span>Compras</span></button>
         <button class="nav-item" data-page="estoque"><span class="nav-icon">◫</span><span>Estoque</span></button>
         <button class="nav-item" data-page="financeiro"><span class="nav-icon">R$</span><span>Financeiro</span></button>
-        <button class="nav-item" data-page="produtores"><span class="nav-icon">♙</span><span>Produtores</span></button>
+        <button class="nav-item" data-page="produtores"><span class="nav-icon">♙</span><span>Vendedores</span></button>
       </nav>
 
       <div class="sidebar-footer">
         <button class="ghost-btn full" id="openSettingsBtn">⚙ Configurações</button>
-        <div class="version">BRACOFFEE • v1.3</div>
+        <div class="version">BRACOFFEE • v1.4</div>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
         <div class="topbar-brand">
-          <img src="assets/bracoffee_logo.png" alt="BRACOFFEE" class="topbar-brand-logo" />
+          <img src="bracoffee_logo.png" alt="BRACOFFEE" class="topbar-brand-logo" />
           <div class="topbar-brand-copy">
             <p class="eyebrow" id="pageEyebrow">VISÃO GERAL</p>
             <h1 id="pageTitle">Bom trabalho 👋</h1>
@@ -56,7 +56,7 @@
           <div>
             <p class="eyebrow light">BALCÃO RÁPIDO</p>
             <h2>Compra registrada sem enrolação.</h2>
-            <p>Lance uma compra uma única vez. A BRACOFFEE cria OC, contrato, estoque e financeiro automaticamente.</p>
+            <p>Registre a compra e gere a OC/contrato. O café só entra no estoque quando você confirmar a entrada.</p>
           </div>
           <button class="hero-action" data-goto="balcao">Registrar compra <span>→</span></button>
         </div>
@@ -100,48 +100,57 @@
 
         <form id="purchaseForm" class="form-layout">
           <div class="form-card">
-            <div class="form-card-title"><span>1</span><div><h3>Vendedor</h3><p>Quem está vendendo o café?</p></div></div>
+            <div class="form-card-title"><span>1</span><div><h3>Vendedor</h3><p>Cadastro usado na OC e no contrato.</p></div></div>
             <div class="form-grid cols-2">
-              <label class="field span-2">
-                <span>Nome do vendedor *</span>
-                <input id="sellerName" name="sellerName" list="producerList" placeholder="Digite o nome" required autocomplete="off" />
-                <datalist id="producerList"></datalist>
-              </label>
-              <label class="field"><span>CPF / CNPJ</span><input id="sellerDoc" name="sellerDoc" placeholder="Somente se necessário" /></label>
-              <label class="field"><span>Telefone</span><input id="sellerPhone" name="sellerPhone" inputmode="tel" placeholder="(00) 00000-0000" /></label>
-              <label class="field"><span>Fazenda / propriedade</span><input id="sellerFarm" name="sellerFarm" placeholder="Opcional" /></label>
-              <label class="field"><span>Cidade</span><input id="sellerCity" name="sellerCity" placeholder="Cidade / UF" /></label>
+              <label class="field span-2"><span>Nome do vendedor *</span><input id="sellerName" list="producerList" placeholder="Digite o nome" required autocomplete="off" /><datalist id="producerList"></datalist></label>
+              <label class="field"><span>CPF / CNPJ</span><input id="sellerDoc" placeholder="CPF ou CNPJ" /></label>
+              <label class="field"><span>Inscrição Estadual</span><input id="sellerIE" placeholder="IE do vendedor" /></label>
+              <label class="field"><span>Telefone</span><input id="sellerPhone" inputmode="tel" placeholder="(00) 00000-0000" /></label>
+              <label class="field"><span>Fazenda / propriedade</span><input id="sellerFarm" placeholder="Opcional" /></label>
+              <label class="field span-2"><span>Endereço</span><input id="sellerAddress" placeholder="Rua, número, bairro / zona rural" /></label>
+              <label class="field"><span>Cidade</span><input id="sellerCity" placeholder="Cidade / UF" /></label>
             </div>
           </div>
 
           <div class="form-card">
-            <div class="form-card-title"><span>2</span><div><h3>Café</h3><p>Dados do lote negociado.</p></div></div>
+            <div class="form-card-title"><span>2</span><div><h3>Negociação do café</h3><p>Quantidade, preço e referência de mercado em uma única área.</p></div></div>
             <div class="form-grid cols-3">
-              <label class="field"><span>Quantidade de sacas *</span><input id="purchaseBags" name="bags" type="number" step="0.01" min="0" required placeholder="0,00" /></label>
-              <label class="field"><span>Peso total (kg)</span><input id="purchaseWeight" name="weight" type="number" step="0.01" min="0" placeholder="Calculado ou informado" /></label>
-              <label class="field"><span>Bebida *</span><input id="purchaseDrink" name="drink" list="drinkList" required placeholder="Ex.: Duro" /></label>
-              <label class="field"><span>Cata (%)</span><input id="purchaseCata" name="cata" type="number" step="0.01" min="0" max="100" placeholder="0,00" /></label>
-              <label class="field"><span>Umidade (%)</span><input id="purchaseMoisture" name="moisture" type="number" step="0.01" min="0" max="100" placeholder="0,00" /></label>
-              <label class="field"><span>Classificação</span><input id="purchaseClass" name="classification" placeholder="Ex.: Tipo 6" /></label>
-              <label class="field span-3"><span>Observação</span><textarea id="purchaseNotes" name="notes" rows="3" placeholder="Informação importante sobre o lote"></textarea></label>
-            </div>
-          </div>
-
-          <div class="form-card">
-            <div class="form-card-title"><span>3</span><div><h3>Negociação</h3><p>Valor e condição de pagamento.</p></div></div>
-            <div class="form-grid cols-3">
-              <label class="field"><span>Preço por saca *</span><div class="money-input"><span>R$</span><input id="purchasePrice" name="pricePerBag" type="number" min="0" step="0.01" required placeholder="0,00" /></div></label>
+              <label class="field"><span>Quantidade de sacas *</span><input id="purchaseBags" type="number" step="0.01" min="0" required placeholder="0,00" /></label>
+              <label class="field"><span>Peso total (kg)</span><input id="purchaseWeight" type="number" step="0.01" min="0" placeholder="Calculado automaticamente" /></label>
+              <label class="field"><span>Preço por saca *</span><div class="money-input"><span>R$</span><input id="purchasePrice" type="number" min="0" step="0.01" required placeholder="0,00" /></div></label>
+              <label class="field"><span>NY (Nova Iorque)</span><input id="purchaseNY" type="number" step="0.01" placeholder="Ex.: 277,95" /></label>
+              <label class="field"><span>USD / Câmbio</span><input id="purchaseUSD" type="number" step="0.0001" min="0" placeholder="Ex.: 5,2035" /></label>
+              <label class="field"><span>Diferencial</span><div class="computed-value" id="purchaseDifferential">—</div><small class="field-help">Fórmula: (Preço ÷ USD ÷ 132,277 lb) × 100 − NY.</small></label>
               <label class="field"><span>Valor total</span><div class="computed-value" id="purchaseTotal">R$ 0,00</div></label>
-              <label class="field"><span>Data da compra *</span><input id="purchaseDate" name="date" type="date" required /></label>
-              <label class="field"><span>Pagamento</span><select id="purchasePaymentStatus" name="paymentStatus"><option value="pending">A pagar</option><option value="paid">Pago</option></select></label>
-              <label class="field"><span>Forma de pagamento</span><select id="purchasePaymentMethod" name="paymentMethod"><option>PIX</option><option>Transferência</option><option>Dinheiro</option><option>Cheque</option><option>Boleto</option><option>Outro</option></select></label>
-              <label class="field"><span>Vencimento</span><input id="purchaseDueDate" name="dueDate" type="date" /></label>
+              <label class="field"><span>Data da compra *</span><input id="purchaseDate" type="date" required /></label>
+              <label class="field"><span>Tipo da compra</span><select id="purchaseDestination"><option value="stock">Para estoque</option><option value="direct">Venda direta</option><option value="future">Compra futura</option></select></label>
+              <label class="field" id="expectedReceiptField"><span>Previsão de retirada / recebimento</span><input id="purchaseExpectedReceipt" type="date" /></label>
+            </div>
+            <div class="form-subtitle">Qualidade</div>
+            <div class="form-grid cols-3">
+              <label class="field"><span>Bebida *</span><input id="purchaseDrink" list="drinkList" required placeholder="Ex.: Duro" /></label>
+              <label class="field"><span>Catação (%)</span><input id="purchaseCata" type="number" step="0.01" min="0" max="100" placeholder="0,00" /></label>
+              <label class="field"><span>Umidade (%)</span><input id="purchaseMoisture" type="number" step="0.01" min="0" max="100" placeholder="0,00" /></label>
+              <label class="field"><span>Classificação</span><input id="purchaseClass" placeholder="Descreva a classificação" /></label>
+              <label class="field span-2"><span>Observação</span><textarea id="purchaseNotes" rows="3" placeholder="Informações importantes sobre qualidade ou negociação"></textarea></label>
+            </div>
+          </div>
+
+          <div class="form-card">
+            <div class="form-card-title"><span>3</span><div><h3>Pagamento e logística</h3><p>Condições comerciais e onde o café será retirado ou entregue.</p></div></div>
+            <div class="form-grid cols-3">
+              <label class="field"><span>Condição da compra</span><select id="purchaseTerm"><option value="cash">À vista</option><option value="term">A prazo</option><option value="fix">A fixar</option></select></label>
+              <label class="field"><span>Situação financeira</span><select id="purchasePaymentStatus"><option value="pending">A pagar</option><option value="paid">Pago</option></select></label>
+              <label class="field"><span>Forma de pagamento</span><select id="purchasePaymentMethod"><option>PIX</option><option>Transferência</option><option>Dinheiro</option><option>Cheque</option><option>Boleto</option><option>Outro</option></select></label>
+              <label class="field"><span>Vencimento</span><input id="purchaseDueDate" type="date" /></label>
+              <label class="field"><span>Entrega / retirada</span><select id="purchaseDeliveryType"><option value="pickup">Retirar</option><option value="delivered">Posto</option></select></label>
+              <label class="field span-2"><span id="deliveryLocationLabel">Local de retirada</span><input id="purchaseDeliveryLocation" placeholder="Informe o local" /></label>
             </div>
           </div>
 
           <div class="sticky-form-actions">
             <button type="button" class="ghost-btn" id="clearPurchaseBtn">Limpar</button>
-            <div class="action-copy hide-mobile"><strong>Ao finalizar:</strong> cria OC + contrato + estoque + financeiro.</div>
+            <div class="action-copy hide-mobile"><strong>Ao finalizar:</strong> cria OC + contrato + financeiro. O estoque é lançado depois.</div>
             <button type="submit" class="primary-btn large">Finalizar compra</button>
           </div>
         </form>
@@ -161,7 +170,7 @@
 
       <section class="page" id="page-compras">
         <div class="section-intro row-mobile-stack">
-          <div><p class="eyebrow">HISTÓRICO</p><h2>Compras</h2><p>A OC concentra contrato, lote e financeiro da negociação.</p></div>
+          <div><p class="eyebrow">HISTÓRICO</p><h2>Compras</h2><p>A OC concentra a compra, o contrato e o financeiro. A entrada no estoque é feita quando o café chegar.</p></div>
           <button class="primary-btn" data-goto="balcao">+ Nova compra</button>
         </div>
         <div class="toolbar">
@@ -180,9 +189,16 @@
       </section>
 
       <section class="page" id="page-estoque">
-        <div class="section-intro"><div><p class="eyebrow">SALDO</p><h2>Estoque</h2><p>Cada lote continua ligado à ordem de compra de origem.</p></div></div>
+        <div class="section-intro row-mobile-stack">
+          <div><p class="eyebrow">SALDO</p><h2>Estoque</h2><p>A compra não entra aqui sozinha. Você puxa a OC quando o café realmente chegar.</p></div>
+          <button class="primary-btn" id="newStockEntryBtn">+ Entrada por OC</button>
+        </div>
         <div class="stats-grid compact" id="stockStats"></div>
         <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">AGUARDANDO ENTRADA</p><h3>OCs disponíveis para receber</h3></div></div>
+          <div id="pendingStockPurchases" class="cards-list"></div>
+        </div>
+        <div class="panel stock-panel-gap">
           <div class="panel-head"><div><p class="eyebrow">LOTES</p><h3>Cafés disponíveis</h3></div><div class="search-box small">⌕ <input id="stockSearch" placeholder="Buscar lote, OC, produtor ou bebida" /></div></div>
           <div id="stockLots" class="cards-list"></div>
         </div>
@@ -200,8 +216,8 @@
 
       <section class="page" id="page-produtores">
         <div class="section-intro row-mobile-stack">
-          <div><p class="eyebrow">CADASTRO</p><h2>Produtores e vendedores</h2><p>Cadastre uma vez. Depois basta digitar o nome no balcão.</p></div>
-          <button class="primary-btn" id="newProducerBtn">+ Novo produtor</button>
+          <div><p class="eyebrow">CADASTRO</p><h2>Vendedores</h2><p>Cadastre uma vez. Depois basta digitar o nome no balcão.</p></div>
+          <button class="primary-btn" id="newProducerBtn">+ Novo vendedor</button>
         </div>
         <div class="toolbar"><div class="search-box">⌕ <input id="producerSearch" placeholder="Buscar nome, documento, cidade ou telefone" /></div></div>
         <div id="producersList" class="cards-list"></div>
@@ -242,16 +258,18 @@
 
   <dialog class="modal" id="producerModal">
     <form method="dialog" id="producerForm">
-      <div class="modal-head"><div><p class="eyebrow">PRODUTOR</p><h3 id="producerModalTitle">Novo produtor</h3></div><button type="button" class="icon-btn" data-close-dialog="producerModal">×</button></div>
+      <div class="modal-head"><div><p class="eyebrow">VENDEDOR</p><h3 id="producerModalTitle">Novo vendedor</h3></div><button type="button" class="icon-btn" data-close-dialog="producerModal">×</button></div>
       <input type="hidden" id="producerId" />
       <div class="form-grid cols-2">
         <label class="field span-2"><span>Nome *</span><input id="producerName" required /></label>
         <label class="field"><span>CPF / CNPJ</span><input id="producerDoc" /></label>
+        <label class="field"><span>Inscrição Estadual</span><input id="producerIE" /></label>
         <label class="field"><span>Telefone</span><input id="producerPhone" /></label>
         <label class="field"><span>Fazenda / propriedade</span><input id="producerFarm" /></label>
+        <label class="field span-2"><span>Endereço</span><input id="producerAddress" /></label>
         <label class="field"><span>Cidade</span><input id="producerCity" /></label>
       </div>
-      <div class="modal-actions"><button type="button" class="ghost-btn" data-close-dialog="producerModal">Cancelar</button><button class="primary-btn" value="default">Salvar produtor</button></div>
+      <div class="modal-actions"><button type="button" class="ghost-btn" data-close-dialog="producerModal">Cancelar</button><button class="primary-btn" value="default">Salvar vendedor</button></div>
     </form>
   </dialog>
 
@@ -259,6 +277,22 @@
     <div class="modal-head"><div><p class="eyebrow">ORDEM DE COMPRA</p><h3 id="detailOc">OC</h3></div><button type="button" class="icon-btn" data-close-dialog="purchaseDetailModal">×</button></div>
     <div id="purchaseDetailBody"></div>
     <div class="modal-actions wrap"><button class="ghost-btn" id="detailDeleteBtn">Excluir</button><button class="ghost-btn" id="detailPayBtn">Dar baixa</button><button class="ghost-btn" id="detailEditBtn">Editar compra</button><button class="primary-btn" id="detailContractBtn">Imprimir contrato</button></div>
+  </dialog>
+
+  <dialog class="modal" id="stockEntryModal">
+    <form method="dialog" id="stockEntryForm">
+      <div class="modal-head"><div><p class="eyebrow">ENTRADA DE ESTOQUE</p><h3>Receber café de uma OC</h3></div><button type="button" class="icon-btn" data-close-dialog="stockEntryModal">×</button></div>
+      <div class="form-grid cols-2">
+        <label class="field span-2"><span>Ordem de compra *</span><select id="stockEntryPurchaseId" required></select></label>
+        <div class="lot-highlight span-2" id="stockEntrySummary">Selecione uma OC.</div>
+        <label class="field"><span>Sacas recebidas *</span><input id="stockEntryBags" type="number" min="0.01" step="0.01" required /></label>
+        <label class="field"><span>Peso recebido (kg)</span><input id="stockEntryWeight" type="number" min="0" step="0.01" placeholder="Calculado por 60 kg/saca" /></label>
+        <label class="field"><span>Data da entrada *</span><input id="stockEntryDate" type="date" required /></label>
+        <label class="field"><span>Armazém / local</span><input id="stockEntryWarehouse" placeholder="Onde o café entrou" /></label>
+        <label class="field span-2"><span>Observação</span><textarea id="stockEntryNotes" rows="3" placeholder="Opcional"></textarea></label>
+      </div>
+      <div class="modal-actions"><button type="button" class="ghost-btn" data-close-dialog="stockEntryModal">Cancelar</button><button class="primary-btn" value="default">Confirmar entrada</button></div>
+    </form>
   </dialog>
 
   <dialog class="modal" id="saleModal">
