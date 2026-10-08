@@ -1,4 +1,4 @@
-# Atualizar para BRACOFFEE Office 2.1
+# Atualizar para BRACOFFEE Office 2.2
 
 ## 1. Guardar os dados atuais
 
@@ -15,6 +15,8 @@ Na configuração de armazenamento do recurso no Coolify, adicione um volume per
 ```
 /app/data
 ```
+
+Se você já usa uma versão 2.0 ou posterior, mantenha o volume existente para conservar a base atual.
 
 Use um nome fixo, por exemplo `bracoffee-dados`, e reutilize o mesmo volume nos próximos redeploys. O `DATA_DIR` do Dockerfile já aponta para `/app/data`. O volume declarado no Dockerfile não substitui a configuração de armazenamento persistente do recurso no Coolify.
 

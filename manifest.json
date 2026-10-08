@@ -4,7 +4,7 @@
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f5f4f0",
-  "theme_color": "#252621",
+  "theme_color": "#292721",
   "description": "Seu escritório de café: provas, compras, documentos, recebimentos e pagamentos.",
   "icons": [
     {

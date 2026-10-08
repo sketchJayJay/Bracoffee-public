@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#2f2118" />
+  <meta name="theme-color" content="#292721" />
   <title>BRACOFFEE | Gestão de Café</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icon-192.png" />
   <link rel="apple-touch-icon" href="icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=2.1" />
+  <link rel="stylesheet" href="styles.css?v=2.2" />
 </head>
 <body>
-  <div class="app-loading" id="appLoading"><img src="bracoffee_logo.png?v=2.1" alt="BRACOFFEE"><div class="loading-line"></div><p>Preparando seu escritório</p></div>
+  <div class="app-loading" id="appLoading"><img src="bracoffee_logo.png?v=2.2" alt="BRACOFFEE"><div class="loading-line"></div><p>Preparando seu escritório</p></div>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
-      <div class="brand-wrap"><img src="bracoffee_logo.png?v=2.1" alt="BRACOFFEE" class="brand-logo"><span>GESTÃO COMERCIAL DE CAFÉ</span></div>
+      <div class="brand-wrap"><img src="bracoffee_logo.png?v=2.2" alt="BRACOFFEE" class="brand-logo"><span>GESTÃO COMERCIAL DE CAFÉ</span></div>
       <button class="nav-search" id="navSearchBtn"><span data-icon="search"></span> Buscar uma compra <kbd>/</kbd></button>
       <div class="nav-caption">ESCRITÓRIO</div>
       <nav class="nav" aria-label="Navegação principal">
@@ -28,11 +28,11 @@
         <button class="nav-item" data-page="produtores"><span class="nav-icon"></span><span>Fornecedores</span></button>
       </nav>
       <div class="sidebar-note"><span data-icon="coffee"></span><strong>Negociar com clareza.</strong><p>Da prova ao recebimento,<br>cada detalhe no seu lugar.</p></div>
-      <div class="sidebar-footer"><button class="sidebar-settings" id="openSettingsBtn"><span data-icon="settings"></span> Configurações</button><div class="version"><span class="version-dot"></span> BRACOFFEE OFFICE <b>2.1</b></div></div>
+      <div class="sidebar-footer"><button class="sidebar-settings" id="openSettingsBtn"><span data-icon="settings"></span> Configurações</button><div class="version"><span class="version-dot"></span> BRACOFFEE OFFICE <b>2.2</b></div></div>
     </aside>
     <main class="main">
       <header class="topbar">
-        <div class="mobile-brand"><img src="bracoffee_logo.png?v=2.1" alt="BRACOFFEE"><span>GESTÃO COMERCIAL<br>DE CAFÉ</span></div>
+        <div class="mobile-brand"><img src="bracoffee_logo.png?v=2.2" alt="BRACOFFEE"><span>GESTÃO COMERCIAL<br>DE CAFÉ</span></div>
         <div class="topbar-brand"><button class="icon-btn back-btn" id="backPageBtn" aria-label="Voltar para o início" hidden><span data-icon="arrowLeft"></span></button><div><p class="eyebrow" id="pageEyebrow">SEU ESCRITÓRIO</p><h1 id="pageTitle">Visão geral</h1></div></div>
         <div class="topbar-actions"><span class="sync-status" id="syncStatus" role="status"><i></i><span>Carregando</span></span><button class="icon-btn export-btn" id="exportBackupBtn" aria-label="Exportar backup" title="Exportar backup"><span data-icon="download"></span></button><button class="icon-btn settings-mobile" id="openSettingsMobileBtn" aria-label="Configurações"><span data-icon="settings"></span></button><button class="ghost-btn logout-btn" id="logoutBtn"><span data-icon="logout"></span><span>Sair</span></button><button class="primary-btn" id="quickBuyBtn"><span data-icon="plus"></span> Nova compra</button></div>
       </header>
@@ -40,8 +40,8 @@
       <section class="page active" id="page-dashboard">
         <div class="dashboard-topline"><p id="dashboardDate"></p><label class="month-control"><span data-icon="calendar"></span><input id="dashboardMonth" type="month" aria-label="Mês de acompanhamento"></label></div>
         <div class="hero-card">
-          <div class="hero-copy"><p class="eyebrow light"><span class="hero-dot"></span> SEU PRÓXIMO NEGÓCIO COMEÇA AQUI</p><h2>Do primeiro contato<br>ao café recebido.</h2><p>Provas, negociações e documentos.<br>Uma visão clara de toda a sua operação.</p><div class="hero-actions"><button class="hero-action" data-goto="balcao">Registrar compra <span data-icon="arrowRight"></span></button><button class="hero-secondary" data-goto="compras">Acompanhar ordens</button></div></div>
-          <div class="hero-art" aria-hidden="true"><div class="brand-showcase"><img src="bracoffee_logo.png?v=2.1" alt=""><span>ORIGEM · CONFIANÇA · NEGOCIAÇÃO</span></div></div>
+          <div class="hero-copy"><p class="eyebrow light"><span class="hero-dot"></span> ORIGEM, CONFIANÇA E BONS NEGÓCIOS</p><h2>Seu café.<em>Em boas mãos.</em></h2><p>Da primeira prova ao recebimento.<br>Clareza em cada etapa da sua operação.</p><div class="hero-actions"><button class="hero-action" data-goto="balcao">Nova compra <span data-icon="arrowRight"></span></button><button class="hero-secondary" data-goto="compras">Ver ordens de compra</button></div></div>
+          <div class="hero-art" aria-hidden="true"><div class="brand-seal"><div class="seal-logo"><img src="bracoffee_logo.png?v=2.2" alt=""></div></div><span class="seal-caption">BRACOFFEE · BONS NEGÓCIOS</span></div>
         </div>
         <div class="stats-grid" id="dashboardStats"></div>
         <div class="dashboard-grid">
@@ -83,7 +83,7 @@
             </div>
             <div class="sticky-form-actions"><div class="purchase-mobile-total"><small>Total do café</small><strong id="purchaseMobileTotal">R$ 0,00</strong></div><div class="purchase-mobile-buttons"><button type="button" class="ghost-btn" id="clearPurchaseBtn">Limpar</button><button type="submit" class="primary-btn large"><span data-icon="check"></span> Finalizar compra</button></div></div>
           </form>
-          <aside class="negotiation-summary"><div class="summary-top"><span>RESUMO DA NEGOCIAÇÃO</span><span class="draft-badge">RASCUNHO</span></div><div class="summary-coffee"><img src="bracoffee_logo.png?v=2.1" alt="BRACOFFEE"></div><div id="purchaseSummaryBody"></div><div class="summary-total"><small>Valor total do café</small><strong id="purchaseTotal">R$ 0,00</strong><span>Corretagem informada separadamente.</span></div><div class="summary-checklist" id="purchaseChecklist"></div><button type="submit" form="purchaseForm" class="primary-btn large summary-submit"><span data-icon="check"></span> Finalizar compra</button><button type="button" class="text-btn" id="clearPurchaseAsideBtn">Limpar negociação</button><p class="summary-footnote"><span data-icon="shield"></span> Gera OC, contrato e financeiro.<br>O estoque acompanha o recebimento físico.</p></aside>
+          <aside class="negotiation-summary"><div class="summary-top"><span>RESUMO DA NEGOCIAÇÃO</span><span class="draft-badge">RASCUNHO</span></div><div class="summary-coffee"><img src="bracoffee_logo.png?v=2.2" alt="BRACOFFEE"></div><div id="purchaseSummaryBody"></div><div class="summary-total"><small>Valor total do café</small><strong id="purchaseTotal">R$ 0,00</strong><span>Corretagem informada separadamente.</span></div><div class="summary-checklist" id="purchaseChecklist"></div><button type="submit" form="purchaseForm" class="primary-btn large summary-submit"><span data-icon="check"></span> Finalizar compra</button><button type="button" class="text-btn" id="clearPurchaseAsideBtn">Limpar negociação</button><p class="summary-footnote"><span data-icon="shield"></span> Gera OC, contrato e financeiro.<br>O estoque acompanha o recebimento físico.</p></aside>
         </div>
       </section>
 
@@ -314,7 +314,7 @@
   <dialog class="modal" id="syncConflictModal"><div class="modal-head"><div><p class="eyebrow">ATUALIZAÇÃO ENTRE APARELHOS</p><h3>Há uma versão mais recente</h3></div></div><div class="conflict-content"><p>Os registros foram atualizados em outro aparelho enquanto você trabalhava. Sua cópia foi guardada para que nenhuma informação seja descartada.</p><p>Carregue a versão atual antes de continuar. Você também pode baixar sua cópia para conferir as alterações.</p></div><div class="modal-actions wrap"><button class="ghost-btn" id="downloadRescueBtn">Baixar minha cópia</button><button class="primary-btn" id="resolveSyncBtn">Carregar versão atual</button></div></dialog>
 
   <div class="toast-stack" id="toastStack" aria-live="polite"></div>
-  <script src="sync.js?v=2.1"></script>
-  <script src="app.js?v=2.1"></script>
+  <script src="sync.js?v=2.2"></script>
+  <script src="app.js?v=2.2"></script>
 </body>
 </html>
