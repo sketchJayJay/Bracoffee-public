@@ -6,10 +6,20 @@
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
   const defaultDB = () => ({
+    schemaVersion: 2,
     settings: {
-      companyName: 'BRACOFFEE',
-      companyDoc: '',
-      companyCity: '',
+      companyName: 'BRACOFFEE CO LTDA.',
+      companyDoc: '52.981.416/0001-31',
+      companyCity: 'Varginha/MG',
+      companyIE: '004.766.165.00-10',
+      companyAddress: 'Rua do Comercio de Café, 342 - Industrial Reinaldo Foresti',
+      companyPostalCode: '37.026-530',
+      companyPhone: '+55 35 99932-1644',
+      companyEmail: 'rubens@bracoffeeco.com',
+      companyWebsite: 'www.bracoffee.com.br',
+      companyInstagram: '@bracoffee.co',
+      invoiceNotes: 'ICMS S/FRETE DIFERIDO CONF. ART.7, PARAGRAFO 1 DECRETO 43080/02.\nVENDA EFETUADA COM ALIQUOTA "ZERO" PARA PIS/COFINS CONF ART 1 INCS XXI DA LEI 10925/04, COM REDAÇÃO DADA PELA LEI 12839/13.',
+      invoiceContacts: 'bracoffee.adm@gmail.com\nrubens@bracoffeeco.com',
       ocPrefix: 'OC',
       contractTerms: 'O vendedor declara ser legítimo proprietário do café descrito nesta ordem de compra e concorda com a quantidade, classificação, preço e condição de pagamento registrados neste documento. A entrega, conferência e liquidação financeira seguirão as condições acordadas entre as partes.'
     },
@@ -19,16 +29,27 @@
     stockLots: [],
     finance: [],
     sales: [],
+    unloadingLocations: [{ id: 'unloading-ldc-varginha', name: 'LOUIS DREYFUS COMPANY BRASIL S.A.', address: 'ROD. BR. 491 S/N, KM 233. - Aeroporto', city: 'Varginha/MG', postalCode: '37.030-087', doc: '47.067.525/0075-44', ie: '707.621.265.0536' }],
     counters: {}
   });
 
   let db = loadDB();
   let activePurchaseId = null;
+  let invoicePurchaseId = null;
+  let invoiceLocationSnapshot = null;
 
   function migrateDB(data) {
     let changed = false;
     data.purchases = Array.isArray(data.purchases) ? data.purchases : [];
     data.stockLots = Array.isArray(data.stockLots) ? data.stockLots : [];
+    if (Number(data.schemaVersion || 1) < 2) {
+      const defaults = defaultDB().settings;
+      ['companyDoc','companyCity'].forEach(key => { if (!String(data.settings[key] || '').trim()) data.settings[key] = defaults[key]; });
+      if (!data.settings.companyName || data.settings.companyName.trim().toUpperCase() === 'BRACOFFEE') data.settings.companyName = defaults.companyName;
+      data.schemaVersion = 2;
+      changed = true;
+    }
+    if (!Array.isArray(data.unloadingLocations)) { data.unloadingLocations = defaultDB().unloadingLocations; changed = true; }
     const purchaseMap = new Map(data.purchases.map(p => [p.id, p]));
 
     // Versões antigas criavam um lote automaticamente ao finalizar a compra.
@@ -53,7 +74,7 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return defaultDB();
       const parsed = JSON.parse(raw);
-      const merged = { ...defaultDB(), ...parsed, settings: { ...defaultDB().settings, ...(parsed.settings || {}) } };
+      const merged = { ...defaultDB(), ...parsed, schemaVersion: parsed.schemaVersion || 1, settings: { ...defaultDB().settings, ...(parsed.settings || {}) } };
       const migrated = migrateDB(merged);
       if (migrated.changed) localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated.data));
       return migrated.data;
@@ -93,6 +114,7 @@
   const destinationLabel = (v) => ({stock:'Para estoque',direct:'Venda direta',future:'Compra futura'}[v] || 'Para estoque');
   const purchaseTermLabel = (v) => ({cash:'À vista',term:'A prazo',fix:'A fixar'}[v] || 'À vista');
   const deliveryLabel = (v) => v === 'delivered' ? 'Posto' : 'Retirar';
+  const brokeragePayerLabel = (v) => ({buyer:'Comprador',seller:'Vendedor',unspecified:'A combinar'}[v] || 'A combinar');
   const diffNum = (n) => Number(n || 0).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
 
   function calcDifferential(pricePerBag, ny, usd) {
@@ -225,6 +247,8 @@
 
   function renderProducerDatalist() {
     $('#producerList').innerHTML = db.producers.map(p => `<option value="${esc(p.name)}"></option>`).join('');
+    const brokers = [...new Set(db.purchases.map(p => p.brokerName).filter(Boolean))];
+    $('#brokerList').innerHTML = brokers.map(name => `<option value="${esc(name)}"></option>`).join('');
   }
 
   function producerExact(name) {
@@ -257,6 +281,44 @@
       el.textContent = `${diff >= 0 ? '+' : ''}${diffNum(diff)}`;
       el.classList.add(diff >= 0 ? 'positive' : 'negative');
     }
+    updateBrokerageCalculations();
+  }
+
+  function brokerageAmount(type, value, total) {
+    const amount = type === 'percent' ? Number(total || 0) * Number(value || 0) / 100 : type === 'fixed' ? Number(value || 0) : 0;
+    return Math.round((amount + Number.EPSILON) * 100) / 100;
+  }
+
+  function brokerageLabel(p) {
+    if (!p.brokerName) return 'Compra direta, sem corretor';
+    if (!p.brokerageType || p.brokerageType === 'none') return 'Sem corretagem';
+    const amount = brokerageAmount(p.brokerageType, p.brokerageValue, p.total);
+    return p.brokerageType === 'percent' ? `${num(p.brokerageValue,4)}% sobre ${money(p.total)} = ${money(amount)}` : `Valor fixo de ${money(amount)}`;
+  }
+
+  function updateBrokerageCalculations() {
+    const hasBroker = $('#purchaseHasBroker').value === 'yes';
+    const type = hasBroker ? $('#purchaseBrokerageType').value : 'none';
+    const total = Number($('#purchaseBags').value || 0) * Number($('#purchasePrice').value || 0);
+    $('#purchaseBrokerageTotal').textContent = money(brokerageAmount(type, $('#purchaseBrokerageValue').value, total));
+  }
+
+  function updateBrokerUI() {
+    const hasBroker = $('#purchaseHasBroker').value === 'yes';
+    const type = $('#purchaseBrokerageType').value;
+    const hasFee = hasBroker && type !== 'none';
+    $('#purchaseBrokerFields').hidden = !hasBroker;
+    $$('input,select', $('#purchaseBrokerFields')).forEach(el => { el.disabled = !hasBroker; });
+    $('#purchaseBrokerName').required = hasBroker;
+    ['#purchaseBrokerageValueField','#purchaseBrokerageTotalField','#purchaseBrokeragePayerField'].forEach(sel => { $(sel).hidden = !hasFee; });
+    $('#purchaseBrokerageValue').disabled = !hasFee;
+    $('#purchaseBrokerageValue').required = hasFee;
+    $('#purchaseBrokeragePayer').disabled = !hasFee;
+    $('#purchaseBrokerageValueLabel').textContent = type === 'fixed' ? 'Valor fixo (R$) *' : 'Percentual (%) *';
+    $('#purchaseBrokerageValue').step = type === 'fixed' ? '0.01' : '0.0001';
+    $('#purchaseBrokerageValue').placeholder = type === 'fixed' ? 'Valor combinado' : 'Ex.: 0,5 ou 0,2';
+    if (type === 'percent') $('#purchaseBrokerageValue').max = '100'; else $('#purchaseBrokerageValue').removeAttribute('max');
+    updateBrokerageCalculations();
   }
 
   function updateDeliveryUI() {
@@ -282,7 +344,7 @@
     $('#purchaseDestination').value = 'stock';
     $('#purchaseTerm').value = 'cash';
     $('#purchaseDeliveryType').value = 'pickup';
-    updateDeliveryUI(); updateDestinationUI();
+    updateDeliveryUI(); updateDestinationUI(); updateBrokerUI();
     activePurchaseId = null;
   }
 
@@ -291,6 +353,9 @@
     const pricePerBag = Number($('#purchasePrice').value || 0);
     const ny = Number($('#purchaseNY').value || 0);
     const usd = Number($('#purchaseUSD').value || 0);
+    const hasBroker = $('#purchaseHasBroker').value === 'yes';
+    const brokerageType = hasBroker ? $('#purchaseBrokerageType').value : 'none';
+    const brokerageValue = brokerageType === 'none' ? 0 : Number($('#purchaseBrokerageValue').value || 0);
     return {
       sellerName: $('#sellerName').value.trim(),
       sellerDoc: $('#sellerDoc').value.trim(),
@@ -315,7 +380,14 @@
       paymentMethod: $('#purchasePaymentMethod').value,
       dueDate: $('#purchaseDueDate').value,
       deliveryType: $('#purchaseDeliveryType').value,
-      deliveryLocation: $('#purchaseDeliveryLocation').value.trim()
+      deliveryLocation: $('#purchaseDeliveryLocation').value.trim(),
+      brokerName: hasBroker ? $('#purchaseBrokerName').value.trim() : '',
+      brokerDoc: hasBroker ? $('#purchaseBrokerDoc').value.trim() : '',
+      brokerPhone: hasBroker ? $('#purchaseBrokerPhone').value.trim() : '',
+      brokerageType, brokerageValue,
+      brokerageAmount: brokerageAmount(brokerageType, brokerageValue, bags * pricePerBag),
+      brokeragePayer: brokerageType === 'none' ? 'unspecified' : $('#purchaseBrokeragePayer').value,
+      brokerageNotes: hasBroker ? $('#purchaseBrokerageNotes').value.trim() : ''
     };
   }
 
@@ -412,7 +484,7 @@
   function renderPurchases() {
     const q=normalize($('#purchaseSearch')?.value||''); const filter=$('#purchaseFilter')?.value||'all';
     const rows=[...db.purchases].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||'').localeCompare(a.createdAt||'')).filter(p=>{
-      const okQ=!q||normalize(`${p.oc} ${p.sellerName} ${p.sellerDoc} ${p.drink} ${destinationLabel(p.destination)}`).includes(q);
+      const okQ=!q||normalize(`${p.oc} ${p.sellerName} ${p.sellerDoc} ${p.drink} ${p.brokerName||''} ${destinationLabel(p.destination)}`).includes(q);
       return okQ&&(filter==='all'||p.paymentStatus===filter);
     });
     $('#purchasesTable').innerHTML=rows.length?rows.map(p=>`<tr>
@@ -447,6 +519,10 @@
         <div class="detail-box"><label>Estoque</label><strong>${stockLabel}</strong></div>
         <div class="detail-box"><label>Pagamento</label><strong>${purchaseTermLabel(p.purchaseTerm)} · ${p.paymentStatus==='paid'?'Pago':'A pagar'} · ${esc(p.paymentMethod||'—')}</strong></div>
         <div class="detail-box"><label>Entrega / retirada</label><strong>${deliveryLabel(p.deliveryType)} · ${esc(p.deliveryLocation||'—')}</strong></div>
+        <div class="detail-box"><label>Corretor</label><strong>${esc(p.brokerName||'Compra direta, sem corretor')}</strong></div>
+        <div class="detail-box"><label>Corretagem</label><strong>${esc(brokerageLabel(p))}${p.brokerName&&p.brokerageType&&p.brokerageType!=='none'?' · Responsável: '+esc(brokeragePayerLabel(p.brokeragePayer)):''}</strong></div>
+        ${p.brokerageNotes?`<div class="detail-box span-2"><label>Condições da corretagem</label><strong>${esc(p.brokerageNotes)}</strong></div>`:''}
+        ${p.invoiceIssued?`<div class="detail-box span-2"><label>Última instrução de faturamento</label><strong>Emitida em ${dateBR(p.invoiceIssued.date)} · ${esc(p.invoiceIssued.unloadingLocation?.name||'Sem local de descarga')}</strong></div>`:''}
         <div class="detail-box span-2"><label>Observação</label><strong>${esc(p.notes||'Sem observação')}</strong></div>
       </div>
       <div class="detail-section"><h4>Movimentação</h4><div class="timeline">
@@ -462,7 +538,9 @@
     const p=db.purchases.find(x=>x.id===id); if(!p)return; resetPurchaseForm();
     const map={sellerName:p.sellerName,sellerDoc:p.sellerDoc,sellerIE:p.sellerIE,sellerPhone:p.sellerPhone,sellerFarm:p.sellerFarm,sellerAddress:p.sellerAddress,sellerCity:p.sellerCity,purchaseBags:p.bags,purchaseWeight:p.weight,purchasePrice:p.pricePerBag,purchaseNY:p.ny,purchaseUSD:p.usd,purchaseDestination:p.destination||'stock',purchaseExpectedReceipt:p.expectedReceipt,purchaseDrink:p.drink,purchaseCata:p.cata,purchaseMoisture:p.moisture,purchaseClass:p.classification,purchaseNotes:p.notes,purchaseDate:p.date,purchaseTerm:p.purchaseTerm||'cash',purchasePaymentStatus:p.paymentStatus,purchasePaymentMethod:p.paymentMethod,purchaseDueDate:p.dueDate,purchaseDeliveryType:p.deliveryType||'pickup',purchaseDeliveryLocation:p.deliveryLocation};
     Object.entries(map).forEach(([id,val])=>{const el=$(`#${id}`);if(el)el.value=val??'';});
-    $('#purchaseForm').dataset.editingId=id; updatePurchaseCalculations(); updateDeliveryUI(); updateDestinationUI(); $('#purchaseDetailModal').close(); navigate('balcao'); toast('Editando compra',p.oc);
+    const brokerMap={purchaseHasBroker:p.brokerName?'yes':'no',purchaseBrokerName:p.brokerName,purchaseBrokerDoc:p.brokerDoc,purchaseBrokerPhone:p.brokerPhone,purchaseBrokerageType:p.brokerageType||'none',purchaseBrokerageValue:p.brokerageValue||'',purchaseBrokeragePayer:p.brokeragePayer||'unspecified',purchaseBrokerageNotes:p.brokerageNotes};
+    Object.entries(brokerMap).forEach(([id,val])=>{$(`#${id}`).value=val??'';});
+    $('#purchaseForm').dataset.editingId=id; updatePurchaseCalculations(); updateDeliveryUI(); updateDestinationUI(); updateBrokerUI(); $('#purchaseDetailModal').close(); navigate('balcao'); toast('Editando compra',p.oc);
   }
 
   function setPurchasePaid(id, paid) {
@@ -576,50 +654,205 @@
   function saveProducer(){const id=$('#producerId').value;const data={name:$('#producerName').value.trim(),doc:$('#producerDoc').value.trim(),ie:$('#producerIE').value.trim(),phone:$('#producerPhone').value.trim(),farm:$('#producerFarm').value.trim(),address:$('#producerAddress').value.trim(),city:$('#producerCity').value.trim(),updatedAt:new Date().toISOString()};if(!data.name)return;if(id)Object.assign(db.producers.find(p=>p.id===id),data);else db.producers.push({id:uid('prod'),...data,createdAt:new Date().toISOString()});saveDB();$('#producerModal').close();toast(id?'Vendedor atualizado':'Vendedor cadastrado');}
   function deleteProducer(id){const p=db.producers.find(x=>x.id===id);if(!p)return;const used=db.purchases.some(x=>x.producerId===id);if(used){toast('Cadastro em uso','Este produtor possui compras vinculadas e não pode ser excluído.','error');return;}if(confirm(`Excluir ${p.name}?`)){db.producers=db.producers.filter(x=>x.id!==id);saveDB();toast('Produtor excluído');}}
 
-  function printContract(id){
-    const p=db.purchases.find(x=>x.id===id);if(!p)return;
-    const s=db.settings; const logo=new URL('bracoffee_logo.png',location.href).href;
-    const w=window.open('','_blank'); if(!w){toast('Pop-up bloqueado','Permita pop-ups para imprimir o contrato.','error');return;}
-    const diff=p.differential===null||p.differential===undefined?'Não informado':`${p.differential>=0?'+':''}${diffNum(p.differential)}`;
-    w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(p.oc)} - Contrato</title><style>
-      @page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;color:#2a2521;margin:0;font-size:11px;line-height:1.4}.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #8a6035;padding-bottom:12px;margin-bottom:16px}.logo{width:220px;height:auto}.oc{text-align:right}.oc h1{font-size:19px;margin:4px 0;color:#75502f}.muted{color:#746b63}.title{text-align:center;margin:18px 0 14px;font-size:17px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.box{border:1px solid #ddd2c5;border-radius:7px;padding:8px}.box span{display:block;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:#88796a;font-weight:bold}.box strong{display:block;margin-top:2px;font-size:11px}.wide{grid-column:1/-1}.section-title{margin:15px 0 7px;color:#75502f;font-size:11px;text-transform:uppercase;letter-spacing:.08em}.terms{margin-top:16px;text-align:justify}.signs{display:grid;grid-template-columns:1fr 1fr;gap:55px;margin-top:55px}.sign{border-top:1px solid #4b423b;padding-top:6px;text-align:center}.foot{margin-top:24px;text-align:center;font-size:9px;color:#8b8076}@media print{.no-print{display:none!important}}
-    </style></head><body>
-      <div class="head"><img src="${logo}" class="logo"><div class="oc"><span class="muted">ORDEM DE COMPRA</span><h1>${esc(p.oc)}</h1><span>${dateBR(p.date)}</span></div></div>
-      <h2 class="title">CONTRATO DE COMPRA DE CAFÉ</h2>
-      <div class="section-title">Vendedor</div><div class="grid">
-        <div class="box"><span>Vendedor</span><strong>${esc(p.sellerName)}</strong></div><div class="box"><span>CPF / CNPJ</span><strong>${esc(p.sellerDoc||'Não informado')}</strong></div>
-        <div class="box"><span>Inscrição Estadual</span><strong>${esc(p.sellerIE||'Não informada')}</strong></div><div class="box"><span>Telefone</span><strong>${esc(p.sellerPhone||'Não informado')}</strong></div>
-        <div class="box"><span>Propriedade</span><strong>${esc(p.sellerFarm||'Não informada')}</strong></div><div class="box"><span>Cidade</span><strong>${esc(p.sellerCity||'Não informada')}</strong></div>
-        <div class="box wide"><span>Endereço</span><strong>${esc(p.sellerAddress||'Não informado')}</strong></div>
-      </div>
-      <div class="section-title">Negociação</div><div class="grid">
-        <div class="box"><span>Quantidade</span><strong>${num(p.bags)} sacas (${num(p.weight)} kg)</strong></div><div class="box"><span>Preço por saca</span><strong>${money(p.pricePerBag)}</strong></div>
-        <div class="box"><span>Valor total</span><strong>${money(p.total)}</strong></div><div class="box"><span>Tipo da compra</span><strong>${esc(destinationLabel(p.destination))}${p.expectedReceipt?' · Previsão '+dateBR(p.expectedReceipt):''}</strong></div>
-        <div class="box"><span>NY (Nova Iorque)</span><strong>${p.ny?num(p.ny,2):'Não informado'}</strong></div><div class="box"><span>USD / Câmbio</span><strong>${p.usd?num(p.usd,4):'Não informado'}</strong></div>
-        <div class="box"><span>Diferencial</span><strong>${diff}</strong></div><div class="box"><span>Data da compra</span><strong>${dateBR(p.date)}</strong></div>
-      </div>
-      <div class="section-title">Qualidade</div><div class="grid">
-        <div class="box"><span>Bebida</span><strong>${esc(p.drink||'Não informada')}</strong></div><div class="box"><span>Classificação</span><strong>${esc(p.classification||'Não informada')}</strong></div>
-        <div class="box"><span>Catação</span><strong>${p.cata?num(p.cata)+'%':'Não informada'}</strong></div><div class="box"><span>Umidade</span><strong>${p.moisture?num(p.moisture)+'%':'Não informada'}</strong></div>
-        <div class="box wide"><span>Observações</span><strong>${esc(p.notes||'Sem observações adicionais.')}</strong></div>
-      </div>
-      <div class="section-title">Pagamento e logística</div><div class="grid">
-        <div class="box"><span>Condição</span><strong>${purchaseTermLabel(p.purchaseTerm)}</strong></div><div class="box"><span>Forma de pagamento</span><strong>${esc(p.paymentMethod||'Não informada')}</strong></div>
-        <div class="box"><span>Situação financeira</span><strong>${p.paymentStatus==='paid'?'Pago':'A pagar'}</strong></div><div class="box"><span>Vencimento</span><strong>${dateBR(p.dueDate)}</strong></div>
-        <div class="box"><span>Entrega / retirada</span><strong>${deliveryLabel(p.deliveryType)}</strong></div><div class="box"><span>Local</span><strong>${esc(p.deliveryLocation||'Não informado')}</strong></div>
-      </div>
-      <div class="terms"><strong>Condições</strong><p>${esc(s.contractTerms||'')}</p></div>
-      <div class="signs"><div class="sign">${esc(p.sellerName)}<br><span class="muted">Vendedor</span></div><div class="sign">${esc(s.companyName||'BRACOFFEE')}<br><span class="muted">Comprador</span></div></div>
-      <div class="foot">${esc(s.companyName||'BRACOFFEE')}${s.companyDoc?' · '+esc(s.companyDoc):''}${s.companyCity?' · '+esc(s.companyCity):''}<br>Documento vinculado à ordem de compra ${esc(p.oc)}.</div>
-      <script>window.onload=()=>setTimeout(()=>window.print(),250)<\/script>
-    </body></html>`); w.document.close();
+  function openDocumentWindow() {
+    const w=window.open('','_blank');
+    if(!w)toast('Pop-up bloqueado','Permita pop-ups para abrir o documento.','error');
+    return w;
   }
 
-  function openSettings(){const s=db.settings;$('#settingCompanyName').value=s.companyName||'';$('#settingOcPrefix').value=s.ocPrefix||'OC';$('#settingCompanyDoc').value=s.companyDoc||'';$('#settingCompanyCity').value=s.companyCity||'';$('#settingContractTerms').value=s.contractTerms||'';$('#settingsModal').showModal();}
-  function saveSettings(){db.settings={...db.settings,companyName:$('#settingCompanyName').value.trim()||'BRACOFFEE',ocPrefix:$('#settingOcPrefix').value.trim().toUpperCase()||'OC',companyDoc:$('#settingCompanyDoc').value.trim(),companyCity:$('#settingCompanyCity').value.trim(),contractTerms:$('#settingContractTerms').value.trim()};saveDB();$('#settingsModal').close();toast('Configurações salvas');}
+  function documentHeader(oc,date,buyer,label='ORDEM DE COMPRA') {
+    const logo=new URL('bracoffee_logo.png',location.href).href;
+    return `<header class="head"><img src="${esc(logo)}" class="logo" alt="BRACOFFEE"><div class="header-contact">${[buyer.phone,buyer.email,buyer.website,buyer.instagram].filter(Boolean).map(v=>`<div>${esc(v)}</div>`).join('')}</div></header><div class="reference"><strong>${esc(oc)}</strong><span>${esc(label)} · ${esc(dateBR(date))}</span></div>`;
+  }
+
+  function writeDocument(w,title,body,kind='contract') {
+    w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>
+      @page{size:A4;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#2a2521;margin:0;font-size:10.5px;line-height:1.35;background:#fff}.paper{max-width:186mm;margin:24px auto;padding:0 12px}.head{display:flex;justify-content:space-between;gap:20px;align-items:center;border-bottom:2px solid #75502f;padding-bottom:12px;margin-bottom:12px}.logo{width:200px;height:auto}.header-contact{text-align:right;color:#615245;font-size:9px;line-height:1.5}.reference{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.reference strong{font-size:14px;color:#75502f}.reference span{font-size:9px;color:#746b63}.title{margin:10px 0 12px;font-size:17px;text-align:center;color:#493423}.section{break-inside:avoid}.section-title{margin:10px 0 5px;color:#75502f;font-size:9px;text-transform:uppercase;letter-spacing:.08em;font-weight:bold}.grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}.box{border:1px solid #ded4c9;border-radius:5px;padding:6px 8px;min-width:0;break-inside:avoid}.box span{display:block;font-size:7.5px;text-transform:uppercase;color:#88796a;font-weight:bold}.box strong{display:block;margin-top:2px;font-size:10.5px;overflow-wrap:anywhere}.wide{grid-column:1/-1}.party{border:1px solid #ded4c9;border-radius:5px;padding:8px 10px;overflow-wrap:anywhere}.party strong{display:block}.terms{margin-top:12px}.terms p{margin:5px 0;white-space:pre-wrap;overflow-wrap:anywhere}.signs{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:42px;break-inside:avoid}.signs.has-broker{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.sign{border-top:1px solid #4b423b;padding-top:6px;text-align:center;font-size:9px;overflow-wrap:anywhere}.muted{color:#746b63}.foot{margin-top:18px;text-align:center;font-size:8px;color:#8b8076;break-inside:avoid}.no-print{max-width:186mm;margin:16px auto;padding:12px;background:#f4eee6;border-radius:8px;font-size:12px}.no-print button{background:#8a6035;color:#fff;border:0;border-radius:6px;padding:10px 14px;font-weight:bold;cursor:pointer}.no-print span{margin-left:10px;color:#6a5a4b}.invoice{font-size:12px;line-height:1.5}.invoice .section-title{margin:18px 0 7px;font-size:10px}.invoice .party{padding:12px}.invoice .title{margin:18px 0;font-size:18px}.trade{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;border-top:1px solid #d7c9b9;border-bottom:1px solid #d7c9b9;padding:14px 0}.trade small{display:block;color:#88796a;font-size:9px;text-transform:uppercase}.trade strong{display:block;font-size:14px;overflow-wrap:anywhere}.description{margin:8px 0 12px;font-weight:bold;overflow-wrap:anywhere}.text-block{white-space:pre-wrap;overflow-wrap:anywhere}.invoice .foot{margin-top:24px}.invoice .box strong{font-size:12px}.signature-block{break-inside:avoid}.contract .head{padding-bottom:9px;margin-bottom:9px}.contract .logo{width:180px}.contract .title{margin:8px 0 9px;font-size:16px}.contract .section-title{margin:8px 0 4px}.contract .box{padding:5px 7px}.contract .party{padding:6px 9px}.contract .terms{margin-top:9px}.contract .signs{margin-top:30px}.contract .foot{margin-top:8px}@media print{.no-print{display:none!important}.paper{width:auto;max-width:none;margin:0;padding:0}body{background:#fff}a{color:inherit;text-decoration:none}}@media(max-width:560px){.no-print span{display:block;margin:8px 0 0}.logo{width:160px}.header-contact{font-size:8px}.reference{align-items:flex-start}.reference span{text-align:right}.trade{gap:6px}.trade strong{font-size:12px}}
+    </style></head><body><div class="no-print"><button onclick="window.print()">Imprimir / Salvar PDF</button><span>Na impressão, escolha “Salvar como PDF” para enviar ao fornecedor.</span></div><main class="paper ${kind}">${body}</main><script>window.addEventListener('load',async()=>{await Promise.all(Array.from(document.images).map(i=>i.decode?i.decode().catch(()=>{}):Promise.resolve()));setTimeout(()=>window.print(),200)})<\/script></body></html>`);
+    w.document.close();
+  }
+
+  function printBox(label,value,wide=false) {
+    return `<div class="box${wide?' wide':''}"><span>${esc(label)}</span><strong>${esc(value??'Não informado')}</strong></div>`;
+  }
+
+  function printSection(title,boxes) {
+    return `<section class="section"><h3 class="section-title">${esc(title)}</h3><div class="grid">${boxes}</div></section>`;
+  }
+
+  function printContract(id) {
+    const p=db.purchases.find(x=>x.id===id);if(!p)return;
+    const w=openDocumentWindow();if(!w)return;
+    const buyer=companyData();
+    const diff=p.differential===null||p.differential===undefined?'Não informado':`${p.differential>=0?'+':''}${diffNum(p.differential)}`;
+    const seller=printSection('Vendedor',[
+      printBox('Vendedor',p.sellerName),printBox('CPF / CNPJ · IE',[p.sellerDoc,p.sellerIE].filter(Boolean).join(' · ')||'Não informado'),
+      printBox('Telefone',p.sellerPhone||'Não informado'),printBox('Propriedade',p.sellerFarm||'Não informada'),
+      printBox('Endereço / cidade',[p.sellerAddress,p.sellerCity].filter(Boolean).join(' · ')||'Não informado',true)
+    ].join(''));
+    const negotiation=printSection('Negociação',[
+      printBox('Quantidade',`${num(p.bags)} sacas (${num(p.weight)} kg)`),printBox('Preço por saca',money(p.pricePerBag)),
+      printBox('Valor total do café',money(p.total)),printBox('Tipo da compra',`${destinationLabel(p.destination)}${p.expectedReceipt?' · Previsão '+dateBR(p.expectedReceipt):''}`),
+      printBox('NY / USD',`${p.ny?num(p.ny,2):'Não informado'} / ${p.usd?num(p.usd,4):'Não informado'}`),printBox('Diferencial',diff)
+    ].join(''));
+    const quality=printSection('Qualidade',[
+      printBox('Bebida / classificação',[p.drink,p.classification].filter(Boolean).join(' · ')||'Não informada'),
+      printBox('Catação / umidade',`${p.cata?num(p.cata)+'%':'Não informada'} / ${p.moisture?num(p.moisture)+'%':'Não informada'}`),
+      p.notes?printBox('Observações',p.notes,true):''
+    ].join(''));
+    const logistics=printSection('Pagamento e logística',[
+      printBox('Condição / forma de pagamento',`${purchaseTermLabel(p.purchaseTerm)} · ${p.paymentMethod||'Não informada'}`),
+      printBox('Situação / vencimento',`${p.paymentStatus==='paid'?'Pago':'A pagar'} · ${dateBR(p.dueDate)}`),
+      printBox('Entrega / retirada',deliveryLabel(p.deliveryType)),printBox('Local',p.deliveryLocation||'Não informado')
+    ].join(''));
+    const broker=p.brokerName?printSection('Corretor e corretagem',[
+      printBox('Corretor',`${p.brokerName}${p.brokerDoc?' · '+p.brokerDoc:''}${p.brokerPhone?' · '+p.brokerPhone:''}`),
+      printBox('Corretagem',brokerageLabel(p)),
+      p.brokerageType&&p.brokerageType!=='none'?printBox('Responsável pelo pagamento',brokeragePayerLabel(p.brokeragePayer)):'',
+      p.brokerageNotes?printBox('Condições combinadas',p.brokerageNotes,true):''
+    ].join('')):'';
+    const signs=`<div class="signs${p.brokerName?' has-broker':''}"><div class="sign">${esc(p.sellerName)}<br><span class="muted">Vendedor</span></div><div class="sign">${esc(buyer.name||'BRACOFFEE')}<br><span class="muted">Comprador</span></div>${p.brokerName?`<div class="sign">${esc(p.brokerName)}<br><span class="muted">Corretor</span></div>`:''}</div>`;
+    writeDocument(w,`${p.oc} - Contrato de compra`,`${documentHeader(p.oc,p.date,buyer)}<h2 class="title">CONTRATO DE COMPRA DE CAFÉ</h2><section class="section"><h3 class="section-title">Comprador</h3><div class="party">${partyHTML(buyer)}</div></section>${seller}${negotiation}${quality}${logistics}${broker}<div class="terms"><strong>Condições</strong><p>${esc(db.settings.contractTerms||'')}</p></div><div class="signature-block">${signs}<div class="foot">Documento vinculado à ordem de compra ${esc(p.oc)}.</div></div>`);
+  }
+
+  function writeInvoice(w,i) {
+    const location=i.unloadingLocation?`<section class="section"><h3 class="section-title">Local de descarga</h3><div class="party">${partyHTML(i.unloadingLocation)}</div></section>`:'';
+    const body=`${documentHeader(i.oc,i.date,i.buyer,'INSTRUÇÃO DE FATURAMENTO')}<h2 class="title">INSTRUÇÃO DE FATURAMENTO</h2><section class="section"><h3 class="section-title">Fornecedor / emitente da nota</h3><div class="party">${partyHTML(i.seller)}</div></section><section class="section"><h3 class="section-title">Faturar para</h3><div class="party">${partyHTML(i.buyer)}</div></section><section class="section"><h3 class="section-title">Café da ordem de compra</h3><p class="description">${esc(i.description)}</p><div class="trade"><div><small>Quantidade / peso</small><strong>${num(i.bags)} sacas</strong><span>${num(i.weight)} kg</span></div><div><small>Preço por saca</small><strong>${money(i.pricePerBag)}</strong></div><div><small>Valor total do café</small><strong>${money(i.total)}</strong></div></div></section>${location}${i.notes?`<section class="section"><h3 class="section-title">Observações para a nota fiscal</h3><div class="text-block">${esc(i.notes)}</div></section>`:''}${i.contacts?`<section class="section"><h3 class="section-title">Contatos para envio de NF e documentos</h3><div class="text-block">${esc(i.contacts)}</div></section>`:''}<div class="foot">Referência: ${esc(i.oc)} · ${esc(i.buyer.name)}<br>Orientações para emissão da nota fiscal pelo fornecedor.</div>`;
+    writeDocument(w,`${i.oc} - Instrução de faturamento`,body,'invoice');
+  }
+
+  function reprintInvoice() {
+    const p=db.purchases.find(x=>x.id===invoicePurchaseId);if(!p?.invoiceIssued)return;
+    const w=openDocumentWindow();if(w)writeInvoice(w,p.invoiceIssued);
+  }
+
+
+  const settingFields = {settingCompanyName:'companyName',settingOcPrefix:'ocPrefix',settingCompanyDoc:'companyDoc',settingCompanyCity:'companyCity',settingCompanyIE:'companyIE',settingCompanyPostalCode:'companyPostalCode',settingCompanyAddress:'companyAddress',settingCompanyPhone:'companyPhone',settingCompanyEmail:'companyEmail',settingCompanyWebsite:'companyWebsite',settingCompanyInstagram:'companyInstagram',settingContractTerms:'contractTerms',settingInvoiceNotes:'invoiceNotes',settingInvoiceContacts:'invoiceContacts'};
+
+  function openSettings(){Object.entries(settingFields).forEach(([id,key])=>{$(`#${id}`).value=db.settings[key]||'';});$('#settingsModal').showModal();}
+
+  function saveSettings(){
+    Object.entries(settingFields).forEach(([id,key])=>{db.settings[key]=$(`#${id}`).value.trim();});
+    db.settings.companyName=db.settings.companyName||'BRACOFFEE';db.settings.ocPrefix=(db.settings.ocPrefix||'OC').toUpperCase();
+    saveDB();$('#settingsModal').close();
+    if($('#invoiceModal').open)renderInvoiceBuyerPreview();
+    toast('Configurações salvas');
+  }
+
+  function companyData() {
+    const s=db.settings;
+    return {name:s.companyName,doc:s.companyDoc,ie:s.companyIE,address:s.companyAddress,city:s.companyCity,postalCode:s.companyPostalCode,phone:s.companyPhone,email:s.companyEmail,website:s.companyWebsite,instagram:s.companyInstagram};
+  }
+
+  function partyHTML(p) {
+    return `<strong>${esc(p.name||'')}</strong>${p.doc?`<div>CPF / CNPJ: ${esc(p.doc)}${p.ie?' · IE: '+esc(p.ie):''}</div>`:p.ie?`<div>IE: ${esc(p.ie)}</div>`:''}${p.address?`<div>${esc(p.address)}</div>`:''}${p.city||p.postalCode?`<div>${esc(p.city||'')}${p.postalCode?' · CEP '+esc(p.postalCode):''}</div>`:''}`;
+  }
+
+  function renderInvoiceBuyerPreview() {
+    $('#invoiceBuyerPreview').innerHTML=`<small>Faturar para</small>${partyHTML(companyData())}`;
+  }
+
+  function selectedInvoiceLocation() {
+    const id=$('#invoiceUnloadingLocation').value;
+    if(!id)return null;
+    if(id==='__snapshot__')return invoiceLocationSnapshot;
+    return db.unloadingLocations.find(l=>l.id===id)||null;
+  }
+
+  function renderInvoiceLocationOptions(selection) {
+    const select=$('#invoiceUnloadingLocation');
+    const current=selection===undefined?selectedInvoiceLocation():selection;
+    invoiceLocationSnapshot=current?{...current}:null;
+    const saved=current&&db.unloadingLocations.find(l=>l.id===current.id);
+    const matches=saved&&['name','address','city','postalCode','doc','ie'].every(key=>(saved[key]||'')===(current[key]||''));
+    select.innerHTML='<option value="">Sem local de descarga</option>'+db.unloadingLocations.map(l=>`<option value="${esc(l.id)}">${esc(l.name)}${l.city?' · '+esc(l.city):''}</option>`).join('');
+    if(current&&!matches)select.insertAdjacentHTML('beforeend',`<option value="__snapshot__">${esc(current.name)} (dados salvos nesta instrução)</option>`);
+    select.value=current?(matches?current.id:'__snapshot__'):'';
+    updateInvoiceLocationPreview();
+  }
+
+  function updateInvoiceLocationPreview() {
+    const l=selectedInvoiceLocation();
+    $('#invoiceLocationPreview').hidden=!l;
+    $('#invoiceLocationPreview').innerHTML=l?partyHTML(l):'';
+  }
+
+  function openInvoice(id) {
+    const p=db.purchases.find(x=>x.id===id);if(!p)return;
+    invoicePurchaseId=id;
+    const draft=p.invoiceInstruction||{};
+    $('#invoiceOc').textContent=p.oc;
+    $('#invoiceSummary').innerHTML=`<strong>${esc(p.sellerName)}</strong><br>${num(p.bags)} sacas · ${num(p.weight)} kg · ${money(p.pricePerBag)}/saca · <strong>${money(p.total)}</strong>`;
+    $('#invoiceDate').value=draft.date||todayISO();
+    $('#invoiceDescription').value=draft.description||`Café${p.drink?' - '+p.drink:''}${p.classification?' - '+p.classification:''}`;
+    $('#invoiceNotes').value=draft.notes??db.settings.invoiceNotes??'';
+    $('#invoiceContacts').value=draft.contacts??db.settings.invoiceContacts??'';
+    renderInvoiceLocationOptions(draft.unloadingLocation||null);renderInvoiceBuyerPreview();
+    $('#invoiceReprintBtn').hidden=!p.invoiceIssued;
+    $('#invoiceModal').showModal();
+  }
+
+  function collectInvoiceForm() {
+    const l=selectedInvoiceLocation();
+    return {date:$('#invoiceDate').value,description:$('#invoiceDescription').value.trim(),notes:$('#invoiceNotes').value.trim(),contacts:$('#invoiceContacts').value.trim(),unloadingLocation:l?{...l}:null};
+  }
+
+  function saveInvoice(issue=false) {
+    const p=db.purchases.find(x=>x.id===invoicePurchaseId);if(!p)return;
+    const data=collectInvoiceForm();
+    if(!data.date||!data.description){toast('Confira a instrução','Data e descrição do café são obrigatórias.','error');return;}
+    let w=null;
+    if(issue){
+      const buyer=companyData();
+      if(!buyer.name||!buyer.doc||!buyer.address||!buyer.city){toast('Complete os dados da empresa','Preencha razão social, documento, endereço e cidade nas configurações.','error');return;}
+      w=openDocumentWindow();if(!w)return;
+    }
+    p.invoiceInstruction=data;
+    if(issue){
+      p.invoiceIssued={...data,oc:p.oc,buyer:{...companyData()},seller:{name:p.sellerName,doc:p.sellerDoc,ie:p.sellerIE,address:p.sellerAddress,city:p.sellerCity},bags:p.bags,weight:p.weight,pricePerBag:p.pricePerBag,total:p.total,issuedAt:new Date().toISOString()};
+    }
+    saveDB();
+    $('#invoiceReprintBtn').hidden=!p.invoiceIssued;
+    toast(issue?'Instrução emitida':'Rascunho salvo',p.oc);
+    if(issue)writeInvoice(w,p.invoiceIssued);
+  }
+
+  function openUnloadingLocations() {renderUnloadingLocations();$('#unloadingLocationsModal').showModal();}
+
+  function renderUnloadingLocations() {
+    $('#unloadingLocationsList').innerHTML=db.unloadingLocations.length?db.unloadingLocations.map(l=>`<div class="location-card">${partyHTML(l)}<div class="inline-actions"><button class="mini-btn" data-location-edit="${esc(l.id)}">Editar</button><button class="mini-btn" data-location-delete="${esc(l.id)}">Excluir</button></div></div>`).join(''):emptyHTML('Nenhum local cadastrado','Cadastre um armazém ou destino de descarga.');
+  }
+
+  function openUnloadingLocation(id='') {
+    const l=db.unloadingLocations.find(x=>x.id===id)||{};
+    $('#unloadingLocationForm').reset();
+    const map={unloadingLocationId:l.id,unloadingLocationName:l.name,unloadingLocationAddress:l.address,unloadingLocationCity:l.city,unloadingLocationPostalCode:l.postalCode,unloadingLocationDoc:l.doc,unloadingLocationIE:l.ie};
+    Object.entries(map).forEach(([id,value])=>{$(`#${id}`).value=value||'';});
+    $('#unloadingLocationTitle').textContent=id?'Editar local':'Cadastrar local';
+    $('#unloadingLocationModal').showModal();
+  }
+
+  function saveUnloadingLocation() {
+    const id=$('#unloadingLocationId').value;
+    const data={id:id||uid('unloading'),name:$('#unloadingLocationName').value.trim(),address:$('#unloadingLocationAddress').value.trim(),city:$('#unloadingLocationCity').value.trim(),postalCode:$('#unloadingLocationPostalCode').value.trim(),doc:$('#unloadingLocationDoc').value.trim(),ie:$('#unloadingLocationIE').value.trim()};
+    if(!data.name){toast('Informe o nome do local','','error');return;}
+    const existing=db.unloadingLocations.find(l=>l.id===id);
+    if(existing)Object.assign(existing,data);else db.unloadingLocations.push(data);
+    saveDB();renderUnloadingLocations();
+    if($('#invoiceModal').open)renderInvoiceLocationOptions(data);
+    $('#unloadingLocationModal').close();toast('Local salvo',data.name);
+  }
+
+  function deleteUnloadingLocation(id) {
+    const l=db.unloadingLocations.find(x=>x.id===id);if(!l||!confirm(`Excluir ${l.name} dos locais disponíveis? Instruções já emitidas mantêm os dados salvos.`))return;
+    const selected=$('#invoiceModal').open?selectedInvoiceLocation():null;
+    db.unloadingLocations=db.unloadingLocations.filter(x=>x.id!==id);saveDB();renderUnloadingLocations();
+    if($('#invoiceModal').open)renderInvoiceLocationOptions(selected);
+    toast('Local excluído');
+  }
 
   function exportBackup(){const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`bracoffee-backup-${todayISO()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('Backup exportado');}
-  function importBackup(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const data=JSON.parse(r.result);if(!data||!Array.isArray(data.purchases)||!Array.isArray(data.stockLots))throw new Error('inválido');if(!confirm('Importar este backup? Os dados atuais serão substituídos.'))return;db={...defaultDB(),...data,settings:{...defaultDB().settings,...(data.settings||{})}};saveDB();toast('Backup importado');$('#settingsModal').close();}catch(e){toast('Arquivo inválido','Não foi possível importar este backup.','error');}};r.readAsText(file);}
+  function importBackup(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const data=JSON.parse(r.result);if(!data||!Array.isArray(data.purchases)||!Array.isArray(data.stockLots))throw new Error('inválido');if(!confirm('Importar este backup? Os dados atuais serão substituídos.'))return;db=migrateDB({...defaultDB(),...data,schemaVersion:data.schemaVersion||1,settings:{...defaultDB().settings,...(data.settings||{})}}).data;saveDB();toast('Backup importado');$('#settingsModal').close();}catch(e){toast('Arquivo inválido','Não foi possível importar este backup.','error');}};r.readAsText(file);}
 
   function bindEvents(){
     $('#logoutBtn')?.addEventListener('click', logoutApp);
@@ -636,14 +869,25 @@
       const ft=e.target.closest('[data-finance-toggle]');if(ft)toggleFinance(ft.dataset.financeToggle);
       const pe=e.target.closest('[data-producer-edit]');if(pe)openProducerModal(db.producers.find(p=>p.id===pe.dataset.producerEdit));
       const pd=e.target.closest('[data-producer-delete]');if(pd)deleteProducer(pd.dataset.producerDelete);
+      const le=e.target.closest('[data-location-edit]');if(le)openUnloadingLocation(le.dataset.locationEdit);
+      const ld=e.target.closest('[data-location-delete]');if(ld)deleteUnloadingLocation(ld.dataset.locationDelete);
     });
 
     $('#quickBuyBtn').addEventListener('click',()=>navigate('balcao'));
     $('#sellerName').addEventListener('change',fillSellerFromProducer);
     ['#purchaseBags','#purchasePrice','#purchaseNY','#purchaseUSD'].forEach(sel=>$(sel).addEventListener('input',updatePurchaseCalculations));
     $('#purchaseDeliveryType').addEventListener('change',updateDeliveryUI); $('#purchaseDestination').addEventListener('change',updateDestinationUI);
+    $('#purchaseHasBroker').addEventListener('change',updateBrokerUI);
+    $('#purchaseBrokerageType').addEventListener('change',()=>{$('#purchaseBrokerageValue').value='';updateBrokerUI();});
+    $('#purchaseBrokerageValue').addEventListener('input',updateBrokerageCalculations);
     $('#clearPurchaseBtn').addEventListener('click',()=>{if(confirm('Limpar os dados desta compra?'))resetPurchaseForm();});
-    $('#purchaseForm').addEventListener('submit',e=>{e.preventDefault();const data=collectPurchaseForm();if(!data.sellerName||!data.bags||!data.drink||!data.date){toast('Confira os campos','Vendedor, sacas, bebida e data são obrigatórios.','error');return;}const id=e.currentTarget.dataset.editingId;if(id)updatePurchase(id,data);else createPurchase(data);});
+    $('#purchaseForm').addEventListener('submit',e=>{
+      e.preventDefault();const data=collectPurchaseForm();
+      if(!data.sellerName||!Number.isFinite(data.bags)||data.bags<=0||!Number.isFinite(data.pricePerBag)||data.pricePerBag<0||!data.drink||!data.date){toast('Confira os campos','Informe vendedor, quantidade positiva, preço, bebida e data.','error');return;}
+      if($('#purchaseHasBroker').value==='yes'&&!data.brokerName){toast('Informe o corretor','O nome será usado no contrato e na assinatura.','error');return;}
+      if(data.brokerageType!=='none'&&(!Number.isFinite(data.brokerageValue)||data.brokerageValue<=0||(data.brokerageType==='percent'&&data.brokerageValue>100))){toast('Confira a corretagem','Informe um valor positivo. O percentual pode ser de até 100%.','error');return;}
+      const id=e.currentTarget.dataset.editingId;if(id)updatePurchase(id,data);else createPurchase(data);
+    });
 
     $('#newSampleBtn').addEventListener('click',()=>openSampleModal()); $('#sampleForm').addEventListener('submit',e=>{e.preventDefault();saveSample();});
     $('#sampleSearch').addEventListener('input',renderSamples); $('#sampleFilter').addEventListener('change',renderSamples);
@@ -657,11 +901,22 @@
     $('#saleForm').addEventListener('submit',e=>{e.preventDefault();saveSale();});
 
     $('#detailContractBtn').addEventListener('click',()=>activePurchaseId&&printContract(activePurchaseId));
+    $('#detailInvoiceBtn').addEventListener('click',()=>activePurchaseId&&openInvoice(activePurchaseId));
+    $('#invoiceUnloadingLocation').addEventListener('change',updateInvoiceLocationPreview);
+    $('#invoiceForm').addEventListener('submit',e=>{e.preventDefault();saveInvoice(e.submitter?.id==='invoiceIssueBtn');});
+    $('#invoiceReprintBtn').addEventListener('click',reprintInvoice);
+    $('#invoiceNewLocationBtn').addEventListener('click',()=>openUnloadingLocation());
+    $('#invoiceManageLocationsBtn').addEventListener('click',openUnloadingLocations);
+    $('#newUnloadingLocationBtn').addEventListener('click',()=>openUnloadingLocation());
+    $('#unloadingLocationForm').addEventListener('submit',e=>{e.preventDefault();saveUnloadingLocation();});
+    $('#invoiceSettingsBtn').addEventListener('click',openSettings);
+    $('#settingsLocationsBtn').addEventListener('click',openUnloadingLocations);
     $('#detailEditBtn').addEventListener('click',()=>activePurchaseId&&editPurchase(activePurchaseId));
     $('#detailDeleteBtn').addEventListener('click',()=>activePurchaseId&&deletePurchase(activePurchaseId));
     $('#detailPayBtn').addEventListener('click',()=>{const p=db.purchases.find(x=>x.id===activePurchaseId);if(p)setPurchasePaid(p.id,p.paymentStatus!=='paid');});
 
     $('#openSettingsBtn').addEventListener('click',openSettings); $('#settingsForm').addEventListener('submit',e=>{e.preventDefault();saveSettings();});
+    $('#openSettingsMobileBtn').addEventListener('click',openSettings);
     $('#exportBackupBtn').addEventListener('click',exportBackup); $('#settingsExportBtn').addEventListener('click',exportBackup); $('#importBackupBtn').addEventListener('click',()=>$('#backupFileInput').click()); $('#backupFileInput').addEventListener('change',e=>importBackup(e.target.files[0]));
 
     $$('dialog').forEach(d=>d.addEventListener('click',e=>{const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}));
@@ -669,7 +924,7 @@
 
   function init(){
     $('#purchaseDate').value=todayISO();
-    updateDeliveryUI(); updateDestinationUI();
+    updateDeliveryUI(); updateDestinationUI(); updateBrokerUI();
     bindEvents();
     renderAll();
     if ('serviceWorker' in navigator) {

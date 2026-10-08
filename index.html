@@ -29,7 +29,7 @@
 
       <div class="sidebar-footer">
         <button class="ghost-btn full" id="openSettingsBtn">⚙ Configurações</button>
-        <div class="version">BRACOFFEE • v1.5</div>
+        <div class="version">BRACOFFEE • v1.6</div>
       </div>
     </aside>
 
@@ -45,6 +45,7 @@
         <div class="topbar-spacer">
           </div>
         <div class="topbar-actions">
+          <button class="icon-btn settings-mobile" id="openSettingsMobileBtn" aria-label="Configurações">⚙</button>
           <button class="ghost-btn logout-btn" id="logoutBtn">Sair</button>
           <button class="ghost-btn hide-mobile" id="exportBackupBtn">Exportar backup</button>
           <button class="primary-btn" id="quickBuyBtn">+ Nova compra</button>
@@ -146,6 +147,20 @@
               <label class="field"><span>Entrega / retirada</span><select id="purchaseDeliveryType"><option value="pickup">Retirar</option><option value="delivered">Posto</option></select></label>
               <label class="field span-2"><span id="deliveryLocationLabel">Local de retirada</span><input id="purchaseDeliveryLocation" placeholder="Informe o local" /></label>
             </div>
+            <div class="form-subtitle">Corretor e corretagem</div>
+            <label class="field"><span>Esta compra tem corretor?</span><select id="purchaseHasBroker"><option value="no">Não, compra direta</option><option value="yes">Sim, informar corretor</option></select></label>
+            <div id="purchaseBrokerFields" class="optional-fields" hidden>
+              <div class="form-grid cols-3">
+                <label class="field"><span>Nome do corretor *</span><input id="purchaseBrokerName" list="brokerList" placeholder="Nome para o contrato e assinatura" disabled /><datalist id="brokerList"></datalist></label>
+                <label class="field"><span>CPF / CNPJ do corretor</span><input id="purchaseBrokerDoc" placeholder="Opcional" disabled /></label>
+                <label class="field"><span>Telefone do corretor</span><input id="purchaseBrokerPhone" inputmode="tel" placeholder="Opcional" disabled /></label>
+                <label class="field"><span>Corretagem combinada</span><select id="purchaseBrokerageType" disabled><option value="none">Sem corretagem</option><option value="percent">Percentual sobre o valor do café</option><option value="fixed">Valor fixo em reais</option></select></label>
+                <label class="field" id="purchaseBrokerageValueField" hidden><span id="purchaseBrokerageValueLabel">Percentual (%) *</span><input id="purchaseBrokerageValue" type="number" min="0" step="0.0001" placeholder="Ex.: 0,5 ou 0,2" disabled /></label>
+                <label class="field" id="purchaseBrokerageTotalField" hidden><span>Valor da corretagem</span><div class="computed-value" id="purchaseBrokerageTotal">R$ 0,00</div><small class="field-help">Calculado separadamente do valor do café.</small></label>
+                <label class="field" id="purchaseBrokeragePayerField" hidden><span>Quem paga a corretagem?</span><select id="purchaseBrokeragePayer" disabled><option value="unspecified">A combinar</option><option value="buyer">Comprador</option><option value="seller">Vendedor</option></select></label>
+                <label class="field span-2"><span>Condições da corretagem</span><input id="purchaseBrokerageNotes" placeholder="Opcional: prazo ou condição combinada" disabled /></label>
+              </div>
+            </div>
           </div>
 
           <div class="sticky-form-actions">
@@ -174,7 +189,7 @@
           <button class="primary-btn" data-goto="balcao">+ Nova compra</button>
         </div>
         <div class="toolbar">
-          <div class="search-box">⌕ <input id="purchaseSearch" placeholder="Buscar OC, vendedor, documento ou bebida" /></div>
+          <div class="search-box">⌕ <input id="purchaseSearch" placeholder="Buscar OC, vendedor, corretor ou bebida" /></div>
           <select id="purchaseFilter"><option value="all">Todas</option><option value="pending">A pagar</option><option value="paid">Pagas</option></select>
         </div>
         <div class="table-card">
@@ -272,7 +287,48 @@
   <dialog class="modal wide" id="purchaseDetailModal">
     <div class="modal-head"><div><p class="eyebrow">ORDEM DE COMPRA</p><h3 id="detailOc">OC</h3></div><button type="button" class="icon-btn" data-close-dialog="purchaseDetailModal">×</button></div>
     <div id="purchaseDetailBody"></div>
-    <div class="modal-actions wrap"><button class="ghost-btn" id="detailDeleteBtn">Excluir</button><button class="ghost-btn" id="detailPayBtn">Dar baixa</button><button class="ghost-btn" id="detailEditBtn">Editar compra</button><button class="primary-btn" id="detailContractBtn">Imprimir contrato</button></div>
+    <div class="modal-actions wrap"><button class="ghost-btn" id="detailDeleteBtn">Excluir</button><button class="ghost-btn" id="detailPayBtn">Dar baixa</button><button class="ghost-btn" id="detailEditBtn">Editar compra</button><button class="ghost-btn" id="detailInvoiceBtn">Instrução de faturamento</button><button class="primary-btn" id="detailContractBtn">Imprimir contrato</button></div>
+  </dialog>
+
+  <dialog class="modal wide" id="invoiceModal">
+    <form id="invoiceForm">
+      <div class="modal-head"><div><p class="eyebrow" id="invoiceOc">ORDEM DE COMPRA</p><h3>Instrução de faturamento</h3></div><button type="button" class="icon-btn" data-close-dialog="invoiceModal">×</button></div>
+      <div class="lot-highlight" id="invoiceSummary"></div>
+      <div class="form-grid cols-2">
+        <label class="field"><span>Data da instrução *</span><input id="invoiceDate" type="date" required /></label>
+        <label class="field"><span>Local de descarga</span><select id="invoiceUnloadingLocation"><option value="">Sem local de descarga</option></select></label>
+        <label class="field span-2"><span>Descrição do café *</span><input id="invoiceDescription" required /></label>
+        <div class="span-2 invoice-location-preview" id="invoiceLocationPreview" hidden></div>
+        <div class="span-2 inline-actions"><button type="button" class="text-btn" id="invoiceNewLocationBtn">+ Cadastrar local de descarga</button><button type="button" class="text-btn" id="invoiceManageLocationsBtn">Gerenciar locais</button></div>
+        <label class="field span-2"><span>Observações para a nota fiscal</span><textarea id="invoiceNotes" rows="5" placeholder="Orientações a serem seguidas pelo fornecedor"></textarea><small class="field-help">Texto livre, preenchido inicialmente conforme o modelo enviado.</small></label>
+        <label class="field span-2"><span>Contatos para envio de NF e documentos</span><textarea id="invoiceContacts" rows="2" placeholder="E-mails ou contatos, um por linha"></textarea></label>
+        <div class="span-2 invoice-buyer-preview" id="invoiceBuyerPreview"></div>
+        <div class="span-2"><button type="button" class="text-btn" id="invoiceSettingsBtn">Editar dados da empresa e textos padrão</button></div>
+      </div>
+      <div class="modal-actions wrap"><button type="button" class="ghost-btn" id="invoiceReprintBtn" hidden>Reimprimir última emissão</button><button type="submit" class="ghost-btn">Salvar rascunho</button><button type="submit" class="primary-btn" id="invoiceIssueBtn">Emitir / imprimir</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="unloadingLocationsModal">
+    <div class="modal-head"><div><p class="eyebrow">FATURAMENTO</p><h3>Locais de descarga</h3></div><button type="button" class="icon-btn" data-close-dialog="unloadingLocationsModal">×</button></div>
+    <div class="locations-list" id="unloadingLocationsList"></div>
+    <div class="modal-actions"><button type="button" class="primary-btn" id="newUnloadingLocationBtn">+ Cadastrar local</button></div>
+  </dialog>
+
+  <dialog class="modal" id="unloadingLocationModal">
+    <form id="unloadingLocationForm">
+      <div class="modal-head"><div><p class="eyebrow">LOCAL DE DESCARGA</p><h3 id="unloadingLocationTitle">Cadastrar local</h3></div><button type="button" class="icon-btn" data-close-dialog="unloadingLocationModal">×</button></div>
+      <input id="unloadingLocationId" type="hidden" />
+      <div class="form-grid cols-2">
+        <label class="field span-2"><span>Nome / razão social *</span><input id="unloadingLocationName" required /></label>
+        <label class="field span-2"><span>Endereço</span><input id="unloadingLocationAddress" placeholder="Rua, número, bairro ou rodovia" /></label>
+        <label class="field"><span>Cidade / UF</span><input id="unloadingLocationCity" /></label>
+        <label class="field"><span>CEP</span><input id="unloadingLocationPostalCode" /></label>
+        <label class="field"><span>CNPJ / CPF</span><input id="unloadingLocationDoc" /></label>
+        <label class="field"><span>Inscrição Estadual</span><input id="unloadingLocationIE" /></label>
+      </div>
+      <div class="modal-actions"><button type="button" class="ghost-btn" data-close-dialog="unloadingLocationModal">Cancelar</button><button class="primary-btn">Salvar local</button></div>
+    </form>
   </dialog>
 
   <dialog class="modal" id="stockEntryModal">
@@ -307,14 +363,24 @@
 
   <dialog class="modal wide" id="settingsModal">
     <form method="dialog" id="settingsForm">
-      <div class="modal-head"><div><p class="eyebrow">CONFIGURAÇÕES</p><h3>Empresa e contrato</h3></div><button type="button" class="icon-btn" data-close-dialog="settingsModal">×</button></div>
+      <div class="modal-head"><div><p class="eyebrow">CONFIGURAÇÕES</p><h3>Empresa e documentos</h3></div><button type="button" class="icon-btn" data-close-dialog="settingsModal">×</button></div>
       <div class="form-grid cols-2">
-        <label class="field"><span>Nome da empresa</span><input id="settingCompanyName" /></label>
+        <label class="field"><span>Razão social da empresa</span><input id="settingCompanyName" /></label>
         <label class="field"><span>Prefixo da ordem de compra</span><input id="settingOcPrefix" maxlength="5" /></label>
         <label class="field"><span>CPF / CNPJ da empresa</span><input id="settingCompanyDoc" /></label>
         <label class="field"><span>Cidade / UF</span><input id="settingCompanyCity" /></label>
+        <label class="field"><span>Inscrição Estadual</span><input id="settingCompanyIE" /></label>
+        <label class="field"><span>CEP</span><input id="settingCompanyPostalCode" /></label>
+        <label class="field span-2"><span>Endereço da empresa</span><input id="settingCompanyAddress" /></label>
+        <label class="field"><span>Telefone</span><input id="settingCompanyPhone" /></label>
+        <label class="field"><span>E-mail</span><input id="settingCompanyEmail" /></label>
+        <label class="field"><span>Site</span><input id="settingCompanyWebsite" /></label>
+        <label class="field"><span>Instagram</span><input id="settingCompanyInstagram" /></label>
         <label class="field span-2"><span>Texto padrão do contrato</span><textarea id="settingContractTerms" rows="7"></textarea></label>
+        <label class="field span-2"><span>Observações padrão da instrução de faturamento</span><textarea id="settingInvoiceNotes" rows="5"></textarea></label>
+        <label class="field span-2"><span>Contatos padrão para envio de NF e documentos</span><textarea id="settingInvoiceContacts" rows="2"></textarea></label>
       </div>
+      <div class="settings-tools"><div><strong>Locais de descarga</strong><p>Selecione um local em cada instrução ou emita sem descarga.</p></div><button type="button" class="ghost-btn" id="settingsLocationsBtn">Gerenciar locais</button></div>
       <div class="settings-tools">
         <div><strong>Backup dos dados</strong><p>Use para migrar o sistema ou guardar uma cópia de segurança.</p></div>
         <div class="inline-actions"><button type="button" class="ghost-btn" id="importBackupBtn">Importar</button><button type="button" class="ghost-btn" id="settingsExportBtn">Exportar</button><input type="file" id="backupFileInput" accept="application/json" hidden /></div>

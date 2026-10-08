@@ -20,6 +20,7 @@
   --sidebar:248px;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html{scroll-behavior:smooth}
 body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
 button,input,select,textarea{font:inherit}
@@ -178,3 +179,15 @@ body:not(.auth-locked) .login-screen{display:none}
 #pendingStockPurchases .data-card{grid-template-columns:minmax(190px,1.3fr) repeat(3,minmax(100px,.7fr)) auto}
 @media(max-width:820px){#pendingStockPurchases .data-card{grid-template-columns:1fr 1fr}#pendingStockPurchases .data-card .main-info,#pendingStockPurchases .data-card .card-actions{grid-column:span 2}}
 @media(max-width:560px){#pendingStockPurchases .data-card{grid-template-columns:1fr}#pendingStockPurchases .data-card .main-info,#pendingStockPurchases .data-card .card-actions{grid-column:span 1}}
+
+/* v1.6 - documentos da compra */
+.settings-mobile{display:none}
+.optional-fields{margin-top:14px}
+.invoice-location-preview,.invoice-buyer-preview{padding:14px;border:1px solid var(--line);border-radius:14px;background:#f8f4ee;font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.invoice-location-preview strong,.invoice-buyer-preview strong{display:block}
+#invoiceSummary{padding:14px;line-height:1.6}
+.locations-list{display:flex;flex-direction:column;gap:12px;padding:18px 20px}
+.location-card{padding:14px;border:1px solid var(--line);border-radius:14px;background:#fff;overflow-wrap:anywhere}
+.location-card small{display:block;color:var(--muted);margin:5px 0 10px;line-height:1.5}
+.detail-box strong{overflow-wrap:anywhere}
+@media(max-width:820px){.settings-mobile{display:grid}.topbar-actions{gap:6px}}
