@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#25221e" />
+  <meta name="theme-color" content="#2f2118" />
   <title>BRACOFFEE | Gestão de Café</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icon-192.png" />
   <link rel="apple-touch-icon" href="icon-192.png" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=2.1" />
 </head>
 <body>
-  <div class="app-loading" id="appLoading"><img src="bracoffee_logo.png" alt="BRACOFFEE"><div class="loading-line"></div><p>Preparando seu escritório</p></div>
+  <div class="app-loading" id="appLoading"><img src="bracoffee_logo.png?v=2.1" alt="BRACOFFEE"><div class="loading-line"></div><p>Preparando seu escritório</p></div>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
-      <div class="brand-wrap"><img src="bracoffee_logo.png" alt="BRACOFFEE" class="brand-logo"><span>GESTÃO COMERCIAL DE CAFÉ</span></div>
+      <div class="brand-wrap"><img src="bracoffee_logo.png?v=2.1" alt="BRACOFFEE" class="brand-logo"><span>GESTÃO COMERCIAL DE CAFÉ</span></div>
       <button class="nav-search" id="navSearchBtn"><span data-icon="search"></span> Buscar uma compra <kbd>/</kbd></button>
       <div class="nav-caption">ESCRITÓRIO</div>
       <nav class="nav" aria-label="Navegação principal">
@@ -28,10 +28,11 @@
         <button class="nav-item" data-page="produtores"><span class="nav-icon"></span><span>Fornecedores</span></button>
       </nav>
       <div class="sidebar-note"><span data-icon="coffee"></span><strong>Negociar com clareza.</strong><p>Da prova ao recebimento,<br>cada detalhe no seu lugar.</p></div>
-      <div class="sidebar-footer"><button class="sidebar-settings" id="openSettingsBtn"><span data-icon="settings"></span> Configurações</button><div class="version"><span class="version-dot"></span> BRACOFFEE OFFICE <b>2.0</b></div></div>
+      <div class="sidebar-footer"><button class="sidebar-settings" id="openSettingsBtn"><span data-icon="settings"></span> Configurações</button><div class="version"><span class="version-dot"></span> BRACOFFEE OFFICE <b>2.1</b></div></div>
     </aside>
     <main class="main">
       <header class="topbar">
+        <div class="mobile-brand"><img src="bracoffee_logo.png?v=2.1" alt="BRACOFFEE"><span>GESTÃO COMERCIAL<br>DE CAFÉ</span></div>
         <div class="topbar-brand"><button class="icon-btn back-btn" id="backPageBtn" aria-label="Voltar para o início" hidden><span data-icon="arrowLeft"></span></button><div><p class="eyebrow" id="pageEyebrow">SEU ESCRITÓRIO</p><h1 id="pageTitle">Visão geral</h1></div></div>
         <div class="topbar-actions"><span class="sync-status" id="syncStatus" role="status"><i></i><span>Carregando</span></span><button class="icon-btn export-btn" id="exportBackupBtn" aria-label="Exportar backup" title="Exportar backup"><span data-icon="download"></span></button><button class="icon-btn settings-mobile" id="openSettingsMobileBtn" aria-label="Configurações"><span data-icon="settings"></span></button><button class="ghost-btn logout-btn" id="logoutBtn"><span data-icon="logout"></span><span>Sair</span></button><button class="primary-btn" id="quickBuyBtn"><span data-icon="plus"></span> Nova compra</button></div>
       </header>
@@ -40,7 +41,7 @@
         <div class="dashboard-topline"><p id="dashboardDate"></p><label class="month-control"><span data-icon="calendar"></span><input id="dashboardMonth" type="month" aria-label="Mês de acompanhamento"></label></div>
         <div class="hero-card">
           <div class="hero-copy"><p class="eyebrow light"><span class="hero-dot"></span> SEU PRÓXIMO NEGÓCIO COMEÇA AQUI</p><h2>Do primeiro contato<br>ao café recebido.</h2><p>Provas, negociações e documentos.<br>Uma visão clara de toda a sua operação.</p><div class="hero-actions"><button class="hero-action" data-goto="balcao">Registrar compra <span data-icon="arrowRight"></span></button><button class="hero-secondary" data-goto="compras">Acompanhar ordens</button></div></div>
-          <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-bean"><svg viewBox="0 0 180 220"><path d="M112 12C162 27 179 80 159 132c-16 44-61 91-106 74C7 189 2 134 24 85 45 39 72 1 112 12Z" fill="currentColor"/><path d="M126 32c-44 28-17 77-62 108-18 13-17 31-14 48" fill="none" stroke="#372c21" stroke-width="9" stroke-linecap="round"/></svg></div><span class="art-caption">BRACOFFEE<br><b>ORIGEM &amp; NEGOCIAÇÃO</b></span></div>
+          <div class="hero-art" aria-hidden="true"><div class="brand-showcase"><img src="bracoffee_logo.png?v=2.1" alt=""><span>ORIGEM · CONFIANÇA · NEGOCIAÇÃO</span></div></div>
         </div>
         <div class="stats-grid" id="dashboardStats"></div>
         <div class="dashboard-grid">
@@ -55,16 +56,16 @@
         <div class="section-intro"><div><p class="eyebrow">UMA NEGOCIAÇÃO, TUDO CONECTADO</p><h2 id="purchaseFormTitle">Nova compra</h2><p>Informe o fornecedor, o café e as condições. A OC é criada ao salvar.</p></div><span class="step-pill"><span data-icon="file"></span> Contrato pronto ao finalizar</span></div>
         <div class="purchase-workspace">
           <form id="purchaseForm" class="form-layout">
-            <div class="form-card"><div class="form-card-title"><span>01</span><div><h3>Quem vende o café?</h3><p>Digite o nome para usar um cadastro existente.</p></div></div>
+            <div class="form-card"><div class="form-card-title"><span>01</span><div><h3>Fornecedor</h3><p>Digite o nome para usar um cadastro existente.</p></div></div>
               <div class="form-grid cols-2"><label class="field"><span>Fornecedor *</span><input id="sellerName" list="producerList" placeholder="Nome ou razão social" required autocomplete="off"><datalist id="producerList"></datalist></label><label class="field"><span>CPF / CNPJ</span><input id="sellerDoc" placeholder="Documento do fornecedor"></label></div>
               <details class="form-disclosure"><summary>Dados do fornecedor para o contrato <span data-icon="chevronDown"></span></summary><div class="form-grid cols-2"><label class="field"><span>Inscrição Estadual</span><input id="sellerIE" placeholder="IE"></label><label class="field"><span>Telefone</span><input id="sellerPhone" inputmode="tel" placeholder="(00) 00000-0000"></label><label class="field"><span>Fazenda / propriedade</span><input id="sellerFarm" placeholder="Opcional"></label><label class="field"><span>Cidade / UF</span><input id="sellerCity" placeholder="Cidade / UF"></label><label class="field span-2"><span>Endereço</span><input id="sellerAddress" placeholder="Rua, número, bairro / zona rural"></label></div></details>
             </div>
-            <div class="form-card"><div class="form-card-title"><span>02</span><div><h3>O café e a negociação</h3><p>Quantidade, preço e destino definidos com clareza.</p></div></div>
+            <div class="form-card"><div class="form-card-title"><span>02</span><div><h3>Café e negociação</h3><p>Quantidade, preço e destino definidos com clareza.</p></div></div>
               <div class="form-grid cols-3"><label class="field"><span>Sacas *</span><input id="purchaseBags" type="number" step="0.01" min="0.01" required placeholder="0,00"></label><label class="field"><span>Preço por saca *</span><div class="money-input"><span>R$</span><input id="purchasePrice" type="number" min="0" step="0.01" required placeholder="0,00"></div></label><label class="field"><span>Bebida *</span><input id="purchaseDrink" list="drinkList" required placeholder="Ex.: Duro"></label><label class="field"><span>Peso total (kg)</span><input id="purchaseWeight" type="number" step="0.01" min="0" placeholder="Sacas × 60 kg"></label><label class="field"><span>Data da compra *</span><input id="purchaseDate" type="date" required></label><label class="field"><span>Tipo de compra</span><select id="purchaseDestination"><option value="stock">Para estoque</option><option value="direct">Venda direta</option><option value="future">Compra futura</option></select></label><label class="field span-3" id="expectedReceiptField" hidden><span>Previsão de retirada / recebimento</span><input id="purchaseExpectedReceipt" type="date"></label></div>
               <details class="form-disclosure"><summary>Qualidade e observações <span data-icon="chevronDown"></span></summary><div class="form-grid cols-3"><label class="field"><span>Catação (%)</span><input id="purchaseCata" type="number" step="0.01" min="0" max="100" placeholder="0,00"></label><label class="field"><span>Umidade (%)</span><input id="purchaseMoisture" type="number" step="0.01" min="0" max="100" placeholder="0,00"></label><label class="field"><span>Classificação</span><input id="purchaseClass" placeholder="Opcional"></label><label class="field span-3"><span>Observações da negociação</span><textarea id="purchaseNotes" rows="3" placeholder="Qualidade, entrega ou condições combinadas"></textarea></label></div></details>
               <details class="form-disclosure"><summary>Referência de mercado · NY / câmbio <span data-icon="chevronDown"></span></summary><div class="form-grid cols-3"><label class="field"><span>NY (Nova Iorque)</span><input id="purchaseNY" type="number" step="0.01" placeholder="Ex.: 277,95"></label><label class="field"><span>USD / câmbio</span><input id="purchaseUSD" type="number" step="0.0001" min="0" placeholder="Ex.: 5,2035"></label><label class="field"><span>Diferencial</span><div class="computed-value" id="purchaseDifferential">—</div><small class="field-help">Preço convertido para centavos/lb menos NY.</small></label></div></details>
             </div>
-            <div class="form-card"><div class="form-card-title"><span>03</span><div><h3>Condições e entrega</h3><p>Pagamento, logística e participação do corretor.</p></div></div>
+            <div class="form-card"><div class="form-card-title"><span>03</span><div><h3>Pagamento e entrega</h3><p>Pagamento, logística e participação do corretor.</p></div></div>
               <div class="form-grid cols-3"><label class="field"><span>Condição</span><select id="purchaseTerm"><option value="cash">À vista</option><option value="term">A prazo</option><option value="fix">A fixar</option></select></label><label class="field"><span>Pagamento inicial</span><select id="purchasePaymentStatus"><option value="pending">A pagar</option><option value="paid">Pago integralmente</option><option value="partial" disabled>Pagamento parcial</option></select><small class="field-help" id="purchasePaymentEditHelp" hidden>Gerencie os pagamentos no detalhe da OC.</small></label><label class="field"><span>Vencimento</span><input id="purchaseDueDate" type="date"></label><label class="field"><span>Forma de pagamento</span><select id="purchasePaymentMethod"><option>PIX</option><option>Transferência</option><option>Dinheiro</option><option>Cheque</option><option>Boleto</option><option>Outro</option></select></label><label class="field"><span>Entrega / retirada</span><select id="purchaseDeliveryType"><option value="pickup">Retirar</option><option value="delivered">Posto</option></select></label><label class="field"><span id="deliveryLocationLabel">Local de retirada</span><input id="purchaseDeliveryLocation" placeholder="Onde será retirado"></label></div>
               <div class="broker-heading"><span data-icon="users"></span><div><strong>Participação de corretor</strong><small>Opcional, conforme a negociação.</small></div><select id="purchaseHasBroker" aria-label="Esta compra tem corretor?"><option value="no">Compra direta</option><option value="yes">Com corretor</option></select></div>
                           <div id="purchaseBrokerFields" class="optional-fields" hidden>
@@ -82,7 +83,7 @@
             </div>
             <div class="sticky-form-actions"><div class="purchase-mobile-total"><small>Total do café</small><strong id="purchaseMobileTotal">R$ 0,00</strong></div><div class="purchase-mobile-buttons"><button type="button" class="ghost-btn" id="clearPurchaseBtn">Limpar</button><button type="submit" class="primary-btn large"><span data-icon="check"></span> Finalizar compra</button></div></div>
           </form>
-          <aside class="negotiation-summary"><div class="summary-top"><span>RESUMO DA NEGOCIAÇÃO</span><span class="draft-badge">RASCUNHO</span></div><div class="summary-coffee"><span data-icon="coffee"></span></div><div id="purchaseSummaryBody"></div><div class="summary-total"><small>Valor total do café</small><strong id="purchaseTotal">R$ 0,00</strong><span>Corretagem informada separadamente.</span></div><div class="summary-checklist" id="purchaseChecklist"></div><button type="submit" form="purchaseForm" class="primary-btn large summary-submit"><span data-icon="check"></span> Finalizar compra</button><button type="button" class="text-btn" id="clearPurchaseAsideBtn">Limpar negociação</button><p class="summary-footnote"><span data-icon="shield"></span> Gera OC, contrato e financeiro.<br>O estoque acompanha o recebimento físico.</p></aside>
+          <aside class="negotiation-summary"><div class="summary-top"><span>RESUMO DA NEGOCIAÇÃO</span><span class="draft-badge">RASCUNHO</span></div><div class="summary-coffee"><img src="bracoffee_logo.png?v=2.1" alt="BRACOFFEE"></div><div id="purchaseSummaryBody"></div><div class="summary-total"><small>Valor total do café</small><strong id="purchaseTotal">R$ 0,00</strong><span>Corretagem informada separadamente.</span></div><div class="summary-checklist" id="purchaseChecklist"></div><button type="submit" form="purchaseForm" class="primary-btn large summary-submit"><span data-icon="check"></span> Finalizar compra</button><button type="button" class="text-btn" id="clearPurchaseAsideBtn">Limpar negociação</button><p class="summary-footnote"><span data-icon="shield"></span> Gera OC, contrato e financeiro.<br>O estoque acompanha o recebimento físico.</p></aside>
         </div>
       </section>
 
@@ -313,7 +314,7 @@
   <dialog class="modal" id="syncConflictModal"><div class="modal-head"><div><p class="eyebrow">ATUALIZAÇÃO ENTRE APARELHOS</p><h3>Há uma versão mais recente</h3></div></div><div class="conflict-content"><p>Os registros foram atualizados em outro aparelho enquanto você trabalhava. Sua cópia foi guardada para que nenhuma informação seja descartada.</p><p>Carregue a versão atual antes de continuar. Você também pode baixar sua cópia para conferir as alterações.</p></div><div class="modal-actions wrap"><button class="ghost-btn" id="downloadRescueBtn">Baixar minha cópia</button><button class="primary-btn" id="resolveSyncBtn">Carregar versão atual</button></div></dialog>
 
   <div class="toast-stack" id="toastStack" aria-live="polite"></div>
-  <script src="sync.js"></script>
-  <script src="app.js"></script>
+  <script src="sync.js?v=2.1"></script>
+  <script src="app.js?v=2.1"></script>
 </body>
 </html>

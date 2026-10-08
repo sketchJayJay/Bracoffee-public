@@ -1,6 +1,10 @@
-# BRACOFFEE Office 2.0
+# BRACOFFEE Office 2.1
 
 Um escritório para a rotina de compra de café: negociar, gerar documentos, acompanhar pagamentos e receber o café fisicamente.
+
+## Correção visual 2.1
+
+Logo original restaurada em cores no menu, no login, no resumo da compra e no cabeçalho do celular. O filtro que apagava os detalhes da marca foi removido. Interface ajustada com mais contraste, tons de café e formulários mais compactos. Os endereços dos arquivos visuais usam a versão 2.1 para atualizar a apresentação após o redeploy.
 
 ## Novidades
 
