@@ -6,7 +6,7 @@
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
   const defaultDB = () => ({
-    schemaVersion: 2,
+    schemaVersion: 3,
     settings: {
       companyName: 'BRACOFFEE CO LTDA.',
       companyDoc: '52.981.416/0001-31',
@@ -37,6 +37,8 @@
   let activePurchaseId = null;
   let invoicePurchaseId = null;
   let invoiceLocationSnapshot = null;
+  let activeFinanceId = null;
+  let activeProducerId = null;
 
   function migrateDB(data) {
     let changed = false;
@@ -50,6 +52,19 @@
       changed = true;
     }
     if (!Array.isArray(data.unloadingLocations)) { data.unloadingLocations = defaultDB().unloadingLocations; changed = true; }
+    ['producers','samples','finance','sales'].forEach(key=>{if(!Array.isArray(data[key])){data[key]=[];changed=true;}});
+    data.counters=data.counters&&typeof data.counters==='object'?data.counters:{};
+    data.purchases.forEach(p=>{const m=String(p.oc||'').match(/-(\d{4})-(\d+)$/);if(m)data.counters[m[1]]=Math.max(Number(data.counters[m[1]]||0),Number(m[2]));});
+    if(Number(data.schemaVersion||1)<3){
+      data.finance.forEach(f=>{
+        if(!Array.isArray(f.payments)){
+          const paid=Number(f.paidAmount??(f.status==='paid'?f.amount:0));
+          f.payments=paid>0?[{id:'opening-'+f.id,amount:paid,date:f.paidAt||'',method:f.method||'',notes:'Saldo registrado anteriormente',opening:true}]:[];
+        }
+        reconcileFinance(f,data);
+      });
+      data.schemaVersion=3;changed=true;
+    }
     const purchaseMap = new Map(data.purchases.map(p => [p.id, p]));
 
     // Versões antigas criavam um lote automaticamente ao finalizar a compra.
@@ -85,8 +100,20 @@
   }
 
   function saveDB() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+    try{localStorage.setItem(STORAGE_KEY, JSON.stringify(db));}catch(e){console.warn('Cópia local indisponível',e);}
     renderAll();
+    window.BracoffeeSync.queue(db);
+  }
+
+  function roundMoney(value){return Math.round((Number(value||0)+Number.EPSILON)*100)/100;}
+  function paidFor(f){return roundMoney((f.payments||[]).filter(p=>!p.reversedAt).reduce((s,p)=>s+Number(p.amount||0),0));}
+  function pendingFor(f){return Math.max(0,roundMoney(Number(f.amount||0)-paidFor(f)));}
+  function reconcileFinance(f,data=db){
+    f.paidAmount=paidFor(f);const total=roundMoney(f.amount);
+    f.status=total>0&&f.paidAmount>=total?'paid':f.paidAmount>0?'partial':'pending';
+    const payments=(f.payments||[]).filter(p=>!p.reversedAt&&p.date).sort((a,b)=>a.date.localeCompare(b.date));
+    f.paidAt=f.status==='paid'?(payments.at(-1)?.date||''):'';
+    const p=data.purchases.find(p=>p.id===f.purchaseId);if(p)p.paymentStatus=f.status;
   }
 
   function uid(prefix = 'id') {
@@ -141,6 +168,7 @@
 
 
   async function logoutApp() {
+    await window.BracoffeeSync.whenIdle();
     try {
       await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
     } catch (e) {
@@ -151,6 +179,7 @@
   }
 
   function toast(title, detail = '', type = 'success') {
+    while($('#toastStack').children.length>=2)$('#toastStack').firstElementChild.remove();
     const el = document.createElement('div');
     el.className = `toast ${type}`;
     el.innerHTML = `<strong>${esc(title)}</strong>${detail ? `<small>${esc(detail)}</small>` : ''}`;
@@ -170,16 +199,17 @@
     $$('.page').forEach(p => p.classList.toggle('active', p.id === `page-${page}`));
     $$('.nav-item,.mobile-nav-item').forEach(b => b.classList.toggle('active', b.dataset.page === page));
     const titles = {
-      dashboard: ['VISÃO GERAL', 'Bom trabalho 👋'],
-      balcao: ['BALCÃO', 'Compra rápida'],
+      dashboard: ['SEU ESCRITÓRIO', 'Visão geral'],
+      balcao: ['NEGOCIAÇÃO', 'Balcão de compras'],
       provas: ['PROVADOR', 'Provas de café'],
       compras: ['HISTÓRICO', 'Ordens de compra'],
       estoque: ['SALDO', 'Estoque'],
       financeiro: ['CONTROLE', 'Financeiro'],
-      produtores: ['CADASTRO', 'Vendedores']
+      produtores: ['RELACIONAMENTOS', 'Fornecedores']
     };
     $('#pageEyebrow').textContent = titles[page]?.[0] || 'BRACOFFEE';
     $('#pageTitle').textContent = titles[page]?.[1] || 'BRACOFFEE';
+    $('#backPageBtn').hidden=page==='dashboard';
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (page === 'balcao') setTimeout(() => $('#sellerName')?.focus(), 120);
   }
@@ -200,35 +230,7 @@
     renderStock();
     renderFinance();
     renderProducers();
-  }
-
-  function renderDashboard() {
-    const today = todayISO();
-    const month = today.slice(0, 7);
-    const monthPurchases = db.purchases.filter(p => p.date?.startsWith(month));
-    const todayPurchases = db.purchases.filter(p => p.date === today);
-    const stock = physicalStockLots().reduce((s, l) => s + Number(l.remaining || 0), 0);
-    const pending = db.finance.filter(f => f.type === 'payable' && f.status !== 'paid').reduce((s, f) => s + Math.max(0, Number(f.amount) - Number(f.paidAmount || 0)), 0);
-    const monthTotal = monthPurchases.reduce((s, p) => s + Number(p.total || 0), 0);
-
-    $('#dashboardStats').innerHTML = [
-      ['Compras hoje', `${todayPurchases.length}`, todayPurchases.length ? `${num(todayPurchases.reduce((s,p)=>s+Number(p.bags||0),0))} sacas` : 'Nenhuma compra hoje'],
-      ['Comprado no mês', money(monthTotal), `${monthPurchases.length} ordem(ns) de compra`],
-      ['Estoque disponível', `${num(stock)} sacas`, 'Somente cafés já recebidos'],
-      ['A pagar', money(pending), 'Compras ainda não liquidadas']
-    ].map(([label,value,help]) => `<div class="stat-card"><div class="stat-label">${label}</div><div class="stat-value">${value}</div><div class="stat-help">${help}</div></div>`).join('');
-
-    const recent = [...db.purchases].sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0,5);
-    $('#recentPurchases').innerHTML = recent.length ? recent.map(p => `
-      <div class="list-row">
-        <div><strong>${esc(p.oc)} · ${esc(p.sellerName)}</strong><small>${dateBR(p.date)} · ${num(p.bags)} sacas · ${esc(p.drink)}</small></div>
-        <div class="amount">${money(p.total)}<br>${badge(p.paymentStatus)}</div>
-      </div>`).join('') : emptyHTML('Ainda não há compras', 'A primeira compra feita no balcão vai aparecer aqui.');
-
-    const groups = stockByDrink();
-    const max = Math.max(1, ...groups.map(g => g.total));
-    $('#stockSummary').innerHTML = groups.length ? groups.slice(0,6).map(g => `
-      <div class="stock-line"><div><strong>${esc(g.drink)}</strong><div class="stock-bar"><i style="width:${Math.max(4,(g.total/max)*100)}%"></i></div></div><strong>${num(g.total)} sc</strong></div>`).join('') : emptyHTML('Estoque vazio', 'O café aparece aqui quando uma OC for recebida no estoque.');
+    updatePurchaseSummary();
   }
 
   function stockByDrink() {
@@ -281,7 +283,7 @@
       el.textContent = `${diff >= 0 ? '+' : ''}${diffNum(diff)}`;
       el.classList.add(diff >= 0 ? 'positive' : 'negative');
     }
-    updateBrokerageCalculations();
+    updateBrokerageCalculations();updatePurchaseSummary();
   }
 
   function brokerageAmount(type, value, total) {
@@ -301,6 +303,7 @@
     const type = hasBroker ? $('#purchaseBrokerageType').value : 'none';
     const total = Number($('#purchaseBags').value || 0) * Number($('#purchasePrice').value || 0);
     $('#purchaseBrokerageTotal').textContent = money(brokerageAmount(type, $('#purchaseBrokerageValue').value, total));
+    updatePurchaseSummary();
   }
 
   function updateBrokerUI() {
@@ -329,12 +332,15 @@
 
   function updateDestinationUI() {
     const future = $('#purchaseDestination').value === 'future';
-    $('#expectedReceiptField').style.opacity = future ? '1' : '.75';
+    $('#expectedReceiptField').hidden = !future;updatePurchaseSummary();
   }
 
   function resetPurchaseForm() {
     $('#purchaseForm').reset();
     $('#purchaseForm').dataset.editingId = '';
+    $('#purchaseFormTitle').textContent='Nova compra';
+    $('#purchasePaymentStatus').disabled=false;
+    $('#purchasePaymentEditHelp').hidden=true;
     $('#purchaseDate').value = todayISO();
     $('#purchaseTotal').textContent = money(0);
     $('#purchaseDifferential').textContent = '—';
@@ -366,7 +372,7 @@
       sellerCity: $('#sellerCity').value.trim(),
       bags,
       weight: Number($('#purchaseWeight').value || bags * 60 || 0),
-      pricePerBag, total: bags * pricePerBag, ny, usd, differential: calcDifferential(pricePerBag,ny,usd),
+      pricePerBag, total: roundMoney(bags * pricePerBag), ny, usd, differential: calcDifferential(pricePerBag,ny,usd),
       destination: $('#purchaseDestination').value,
       expectedReceipt: $('#purchaseExpectedReceipt').value,
       drink: $('#purchaseDrink').value.trim(),
@@ -406,6 +412,9 @@
     const producer = upsertProducerFromPurchase(data);
     const purchase = { id: uid('buy'), oc: nextOC(), producerId: producer.id, ...data, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     const finance = { id: uid('fin'), type: 'payable', purchaseId: purchase.id, oc: purchase.oc, person: purchase.sellerName, amount: purchase.total, paidAmount: purchase.paymentStatus === 'paid' ? purchase.total : 0, status: purchase.paymentStatus, method: purchase.paymentMethod, dueDate: purchase.dueDate, date: purchase.date, createdAt: new Date().toISOString() };
+    finance.payments=purchase.paymentStatus==='paid'&&purchase.total>0?[{id:uid('payment'),amount:purchase.total,date:purchase.date,method:purchase.paymentMethod,notes:'Pagamento informado na compra',createdAt:new Date().toISOString()}]:[];
+    reconcileFinance(finance);
+    purchase.paymentStatus=finance.status;
     purchase.financeId = finance.id;
     db.purchases.push(purchase); db.finance.push(finance); saveDB();
     toast('Compra registrada', `${purchase.oc} criada. O estoque só será movimentado quando o café for recebido.`);
@@ -416,11 +425,13 @@
     const p = db.purchases.find(x => x.id === id); if (!p) return;
     const received = receivedForPurchase(id);
     if (Number(data.bags) < received) { toast('Quantidade inválida', `Já foram recebidas ${num(received)} sacas desta OC.`,'error'); return; }
+    const fin = db.finance.find(f => f.id === p.financeId || f.purchaseId === p.id);
+    if(fin&&roundMoney(data.total)<paidFor(fin)){toast('Valor abaixo do que já foi pago',`Esta compra já recebeu ${money(paidFor(fin))} em pagamentos.`,'error');return;}
+    if(received>0&&data.destination!=='stock'){toast('Esta compra já tem recebimento','Mantenha o tipo “Para estoque” para preservar as entradas físicas.','error');return;}
     Object.assign(p, data, { updatedAt: new Date().toISOString() });
     const prod = upsertProducerFromPurchase(data); p.producerId = prod.id;
     db.stockLots.filter(l => l.purchaseId === id).forEach(l => Object.assign(l,{oc:p.oc,sellerName:p.sellerName,drink:p.drink,cata:p.cata,moisture:p.moisture,classification:p.classification}));
-    const fin = db.finance.find(f => f.id === p.financeId || f.purchaseId === p.id);
-    if (fin) { const wasPaid=fin.status==='paid'; Object.assign(fin,{person:p.sellerName,amount:p.total,status:p.paymentStatus,method:p.paymentMethod,dueDate:p.dueDate,date:p.date}); if(p.paymentStatus==='paid')fin.paidAmount=p.total; else if(wasPaid)fin.paidAmount=0; p.financeId=fin.id; }
+    if (fin) {Object.assign(fin,{person:p.sellerName,amount:p.total,method:p.paymentMethod,dueDate:p.dueDate,date:p.date});reconcileFinance(fin);p.financeId=fin.id;}
     saveDB(); toast('Compra atualizada', `${p.oc} foi atualizada.`); resetPurchaseForm(); openPurchaseDetail(id);
   }
 
@@ -483,12 +494,15 @@
 
   function renderPurchases() {
     const q=normalize($('#purchaseSearch')?.value||''); const filter=$('#purchaseFilter')?.value||'all';
+    const destination=$('#purchaseDestinationFilter').value,month=$('#purchaseMonth').value;
     const rows=[...db.purchases].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||'').localeCompare(a.createdAt||'')).filter(p=>{
       const okQ=!q||normalize(`${p.oc} ${p.sellerName} ${p.sellerDoc} ${p.drink} ${p.brokerName||''} ${destinationLabel(p.destination)}`).includes(q);
-      return okQ&&(filter==='all'||p.paymentStatus===filter);
+      const okStatus=filter==='all'||(filter==='pending'&&p.paymentStatus!=='paid')||(filter==='uninvoiced'&&!p.invoiceIssued)||p.paymentStatus===filter;
+      return okQ&&okStatus&&(destination==='all'||(p.destination||'stock')===destination)&&(!month||p.date?.startsWith(month));
     });
+    $('#purchaseResults').textContent=`${rows.length} compra(s) · ${num(rows.reduce((s,p)=>s+Number(p.bags||0),0))} sacas · ${money(rows.reduce((s,p)=>s+Number(p.total||0),0))}`;
     $('#purchasesTable').innerHTML=rows.length?rows.map(p=>`<tr>
-      <td><strong>${esc(p.oc)}</strong></td><td>${esc(p.sellerName)}</td><td>${dateBR(p.date)}</td><td>${num(p.bags)}</td><td>${esc(p.drink)}</td><td><strong>${money(p.total)}</strong></td><td>${badge(p.paymentStatus)}</td><td><button class="table-link" data-purchase-open="${p.id}">Abrir</button></td>
+      <td><strong>${esc(p.oc)}</strong></td><td>${esc(p.sellerName)}</td><td>${dateBR(p.date)}</td><td>${num(p.bags)}</td><td>${esc(p.drink)}<small>${esc(destinationLabel(p.destination))}</small></td><td><strong>${money(p.total)}</strong></td><td>${badge(p.paymentStatus)}</td><td><button class="table-link" data-purchase-open="${p.id}">Abrir ${icon('arrowUpRight')}</button></td>
     </tr>`).join(''):`<tr><td colspan="8">${emptyHTML('Nenhuma compra encontrada','Registre uma compra no balcão.')}</td></tr>`;
     $('#purchasesMobile').innerHTML=rows.length?rows.map(p=>`<div class="purchase-mobile-card">
       <div class="purchase-mobile-top"><div><strong>${esc(p.oc)}</strong><br><small>${esc(p.sellerName)}</small></div>${badge(p.paymentStatus)}</div>
@@ -496,15 +510,20 @@
       <button class="mini-btn primary" data-purchase-open="${p.id}">Abrir compra</button></div>`).join(''):emptyHTML('Nenhuma compra encontrada','Registre uma compra no balcão.');
   }
 
-  function openPurchaseDetail(id) {
+  function openPurchaseDetail(id) { renderPurchaseDetail(id,true); }
+
+  function renderPurchaseDetail(id,open=true) {
     const p=db.purchases.find(x=>x.id===id); if(!p)return; activePurchaseId=id;
     const lots=physicalStockLots().filter(l=>l.purchaseId===p.id); const received=receivedForPurchase(p.id); const remaining=remainingToReceive(p);
+    const fin=db.finance.find(f=>f.id===p.financeId||f.purchaseId===id),paid=fin?paidFor(fin):0,balance=fin?pendingFor(fin):Number(p.total||0);
     const lotIds=lots.map(l=>l.id); const sales=db.sales.filter(s=>lotIds.includes(s.lotId));
     const stockLabel = (p.destination || 'stock') === 'stock'
       ? `${num(received)} sc recebidas${received ? ` · ${num(remaining)} sc ainda não recebidas` : ' · nenhuma entrada física registrada'}`
       : 'Não enviado ao estoque';
     $('#detailOc').textContent=p.oc;
     $('#purchaseDetailBody').innerHTML=`
+      <div class="order-summary"><div><span class="oc-label">${dateBR(p.date)} · ${esc(destinationLabel(p.destination))}</span><h3>${esc(p.sellerName)}</h3><p>${num(p.bags)} sacas · ${esc(p.drink)}</p></div><div><strong>${money(p.total)}</strong>${badge(p.paymentStatus)}</div></div>
+      <div class="order-stages"><div class="order-stage done"><strong>Compra registrada</strong>OC e contrato disponíveis</div><div class="order-stage ${p.invoiceIssued?'done':''}"><strong>Faturamento</strong>${p.invoiceIssued?'Instrução emitida':'Instrução a emitir'}</div><div class="order-stage ${received>=p.bags?'done':''}"><strong>${p.destination==='direct'?'Entrega direta':p.destination==='future'?'Entrega futura':'Recebimento'}</strong>${p.destination==='direct'?'Sem entrada no estoque':p.destination==='future'?(p.expectedReceipt?dateBR(p.expectedReceipt):'Data a combinar'):`${num(received)} de ${num(p.bags)} sc`}</div><div class="order-stage ${balance===0?'done':''}"><strong>Pagamento</strong>${balance===0?'Liquidado':`${money(balance)} em aberto`}</div></div>
       <div class="detail-grid">
         <div class="detail-box"><label>Vendedor</label><strong>${esc(p.sellerName)}</strong></div>
         <div class="detail-box"><label>CPF / CNPJ · IE</label><strong>${esc(p.sellerDoc||'—')} · ${esc(p.sellerIE||'—')}</strong></div>
@@ -517,7 +536,8 @@
         <div class="detail-box"><label>Classificação</label><strong>${esc(p.classification||'—')}</strong></div>
         <div class="detail-box"><label>Tipo da compra</label><strong>${esc(destinationLabel(p.destination))}${p.expectedReceipt?' · '+dateBR(p.expectedReceipt):''}</strong></div>
         <div class="detail-box"><label>Estoque</label><strong>${stockLabel}</strong></div>
-        <div class="detail-box"><label>Pagamento</label><strong>${purchaseTermLabel(p.purchaseTerm)} · ${p.paymentStatus==='paid'?'Pago':'A pagar'} · ${esc(p.paymentMethod||'—')}</strong></div>
+        <div class="detail-box"><label>Pagamento</label><strong>${purchaseTermLabel(p.purchaseTerm)} · ${p.paymentStatus==='paid'?'Pago':p.paymentStatus==='partial'?'Parcial':'A pagar'} · ${esc(p.paymentMethod||'—')}</strong></div>
+        <div class="detail-box"><label>Pago / saldo em aberto</label><strong>${money(paid)} / ${money(balance)}</strong></div>
         <div class="detail-box"><label>Entrega / retirada</label><strong>${deliveryLabel(p.deliveryType)} · ${esc(p.deliveryLocation||'—')}</strong></div>
         <div class="detail-box"><label>Corretor</label><strong>${esc(p.brokerName||'Compra direta, sem corretor')}</strong></div>
         <div class="detail-box"><label>Corretagem</label><strong>${esc(brokerageLabel(p))}${p.brokerName&&p.brokerageType&&p.brokerageType!=='none'?' · Responsável: '+esc(brokeragePayerLabel(p.brokeragePayer)):''}</strong></div>
@@ -530,24 +550,19 @@
         ${lots.map(l=>`<div class="timeline-row"><div><strong>Entrada no estoque${l.warehouse?' · '+esc(l.warehouse):''}</strong><small>${dateBR(l.date)}</small></div><strong>+ ${num(l.bags)} sc</strong></div>`).join('')}
         ${sales.map(s=>`<div class="timeline-row"><div><strong>Saída${s.buyer?' · '+esc(s.buyer):''}</strong><small>${dateBR(s.date)}</small></div><strong>- ${num(s.bags)} sc</strong></div>`).join('')}
       </div></div>`;
-    $('#detailPayBtn').textContent=p.paymentStatus==='paid'?'Marcar como pendente':'Dar baixa';
-    $('#purchaseDetailModal').showModal();
+    $('#detailPayBtn').textContent=p.paymentStatus==='paid'?'Ver pagamentos':'Registrar pagamento';
+    if(open){$('#purchaseDetailModal').showModal();$('#purchaseDetailModal').scrollTop=0;}
   }
 
   function editPurchase(id) {
     const p=db.purchases.find(x=>x.id===id); if(!p)return; resetPurchaseForm();
     const map={sellerName:p.sellerName,sellerDoc:p.sellerDoc,sellerIE:p.sellerIE,sellerPhone:p.sellerPhone,sellerFarm:p.sellerFarm,sellerAddress:p.sellerAddress,sellerCity:p.sellerCity,purchaseBags:p.bags,purchaseWeight:p.weight,purchasePrice:p.pricePerBag,purchaseNY:p.ny,purchaseUSD:p.usd,purchaseDestination:p.destination||'stock',purchaseExpectedReceipt:p.expectedReceipt,purchaseDrink:p.drink,purchaseCata:p.cata,purchaseMoisture:p.moisture,purchaseClass:p.classification,purchaseNotes:p.notes,purchaseDate:p.date,purchaseTerm:p.purchaseTerm||'cash',purchasePaymentStatus:p.paymentStatus,purchasePaymentMethod:p.paymentMethod,purchaseDueDate:p.dueDate,purchaseDeliveryType:p.deliveryType||'pickup',purchaseDeliveryLocation:p.deliveryLocation};
     Object.entries(map).forEach(([id,val])=>{const el=$(`#${id}`);if(el)el.value=val??'';});
+    $('#purchaseFormTitle').textContent='Editar '+p.oc;
+    $('#purchasePaymentStatus').disabled=true;$('#purchasePaymentEditHelp').hidden=false;
     const brokerMap={purchaseHasBroker:p.brokerName?'yes':'no',purchaseBrokerName:p.brokerName,purchaseBrokerDoc:p.brokerDoc,purchaseBrokerPhone:p.brokerPhone,purchaseBrokerageType:p.brokerageType||'none',purchaseBrokerageValue:p.brokerageValue||'',purchaseBrokeragePayer:p.brokeragePayer||'unspecified',purchaseBrokerageNotes:p.brokerageNotes};
     Object.entries(brokerMap).forEach(([id,val])=>{$(`#${id}`).value=val??'';});
     $('#purchaseForm').dataset.editingId=id; updatePurchaseCalculations(); updateDeliveryUI(); updateDestinationUI(); updateBrokerUI(); $('#purchaseDetailModal').close(); navigate('balcao'); toast('Editando compra',p.oc);
-  }
-
-  function setPurchasePaid(id, paid) {
-    const p=db.purchases.find(x=>x.id===id); if(!p)return;
-    p.paymentStatus=paid?'paid':'pending'; p.updatedAt=new Date().toISOString();
-    const f=db.finance.find(x=>x.id===p.financeId); if(f){f.status=p.paymentStatus;f.paidAmount=paid?f.amount:0;f.paidAt=paid?todayISO():'';}
-    saveDB(); openPurchaseDetail(id); toast(paid?'Pagamento baixado':'Pagamento reaberto',p.oc);
   }
 
   function deletePurchase(id) {
@@ -622,34 +637,6 @@
     lot.remaining=Number(lot.remaining)-bags; db.sales.push(sale); saveDB(); $('#saleModal').close(); toast('Saída registrada',`${num(bags)} sacas baixadas do lote.`);
   }
 
-  function renderFinance() {
-    const all=db.finance.filter(f=>f.type==='payable'); const pending=all.reduce((s,f)=>s+(f.status==='paid'?0:Math.max(0,Number(f.amount)-Number(f.paidAmount||0))),0); const paidMonth=all.filter(f=>f.status==='paid'&&(f.paidAt||f.date||'').startsWith(todayISO().slice(0,7))).reduce((s,f)=>s+Number(f.paidAmount||f.amount||0),0); const total=all.reduce((s,f)=>s+Number(f.amount||0),0);
-    $('#financeStats').innerHTML=[['A pagar',money(pending),'Saldo pendente'],['Pago no mês',money(paidMonth),'Compras liquidadas'],['Total comprado',money(total),'Histórico acumulado']].map(([l,v,h])=>`<div class="stat-card"><div class="stat-label">${l}</div><div class="stat-value">${v}</div><div class="stat-help">${h}</div></div>`).join('');
-    const q=normalize($('#financeSearch')?.value||''); const filter=$('#financeFilter')?.value||'all';
-    const rows=[...all].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).filter(f=>(!q||normalize(`${f.oc} ${f.person}`).includes(q))&&(filter==='all'||f.status===filter));
-    $('#financeList').innerHTML=rows.length?rows.map(f=>`<div class="data-card">
-      <div class="main-info"><strong>${esc(f.oc)} · ${esc(f.person)}</strong><small>${dateBR(f.date)} · ${esc(f.method||'—')}</small></div>
-      <div class="data-meta"><label>Valor</label><strong>${money(f.amount)}</strong></div><div class="data-meta"><label>Vencimento</label><strong>${dateBR(f.dueDate)}</strong></div>
-      <div class="data-meta hide-mid"><label>Status</label><strong>${badge(f.status)}</strong></div><div class="data-meta hide-mid"><label>Pago</label><strong>${money(f.paidAmount||0)}</strong></div>
-      <div class="card-actions"><button class="mini-btn ${f.status==='paid'?'':'primary'}" data-finance-toggle="${f.id}">${f.status==='paid'?'Reabrir':'Dar baixa'}</button><button class="mini-btn" data-purchase-open="${f.purchaseId}">Ver OC</button></div>
-    </div>`).join(''):emptyHTML('Nenhum lançamento encontrado','As compras do balcão criam o financeiro automaticamente.');
-  }
-
-  function toggleFinance(id) {
-    const f=db.finance.find(x=>x.id===id);if(!f)return; const paid=f.status!=='paid'; f.status=paid?'paid':'pending';f.paidAmount=paid?f.amount:0;f.paidAt=paid?todayISO():'';
-    const p=db.purchases.find(x=>x.id===f.purchaseId);if(p)p.paymentStatus=f.status;saveDB();toast(paid?'Pagamento baixado':'Pagamento reaberto',f.oc);
-  }
-
-  function renderProducers() {
-    const q=normalize($('#producerSearch')?.value||''); const rows=[...db.producers].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).filter(p=>!q||normalize(`${p.name} ${p.doc} ${p.ie||''} ${p.phone} ${p.city} ${p.farm} ${p.address||''}`).includes(q));
-    $('#producersList').innerHTML=rows.length?rows.map(p=>`<div class="data-card">
-      <div class="main-info"><strong>${esc(p.name)}</strong><small>${esc(p.farm||p.city||'Sem propriedade informada')}</small></div>
-      <div class="data-meta"><label>CPF / CNPJ</label><strong>${esc(p.doc||'—')}</strong></div><div class="data-meta"><label>IE</label><strong>${esc(p.ie||'—')}</strong></div>
-      <div class="data-meta hide-mid"><label>Telefone</label><strong>${esc(p.phone||'—')}</strong></div><div class="data-meta hide-mid"><label>Compras</label><strong>${db.purchases.filter(x=>x.producerId===p.id).length}</strong></div>
-      <div class="card-actions"><button class="mini-btn" data-producer-edit="${p.id}">Editar</button><button class="mini-btn" data-producer-delete="${p.id}">Excluir</button></div>
-    </div>`).join(''):emptyHTML('Nenhum vendedor cadastrado','Ao fazer uma compra, o vendedor também pode ser cadastrado automaticamente.');
-  }
-
   function openProducerModal(p=null){$('#producerModalTitle').textContent=p?'Editar vendedor':'Novo vendedor';$('#producerId').value=p?.id||'';$('#producerName').value=p?.name||'';$('#producerDoc').value=p?.doc||'';$('#producerIE').value=p?.ie||'';$('#producerPhone').value=p?.phone||'';$('#producerFarm').value=p?.farm||'';$('#producerAddress').value=p?.address||'';$('#producerCity').value=p?.city||'';$('#producerModal').showModal();}
   function saveProducer(){const id=$('#producerId').value;const data={name:$('#producerName').value.trim(),doc:$('#producerDoc').value.trim(),ie:$('#producerIE').value.trim(),phone:$('#producerPhone').value.trim(),farm:$('#producerFarm').value.trim(),address:$('#producerAddress').value.trim(),city:$('#producerCity').value.trim(),updatedAt:new Date().toISOString()};if(!data.name)return;if(id)Object.assign(db.producers.find(p=>p.id===id),data);else db.producers.push({id:uid('prod'),...data,createdAt:new Date().toISOString()});saveDB();$('#producerModal').close();toast(id?'Vendedor atualizado':'Vendedor cadastrado');}
   function deleteProducer(id){const p=db.producers.find(x=>x.id===id);if(!p)return;const used=db.purchases.some(x=>x.producerId===id);if(used){toast('Cadastro em uso','Este produtor possui compras vinculadas e não pode ser excluído.','error');return;}if(confirm(`Excluir ${p.name}?`)){db.producers=db.producers.filter(x=>x.id!==id);saveDB();toast('Produtor excluído');}}
@@ -702,7 +689,7 @@
     ].join(''));
     const logistics=printSection('Pagamento e logística',[
       printBox('Condição / forma de pagamento',`${purchaseTermLabel(p.purchaseTerm)} · ${p.paymentMethod||'Não informada'}`),
-      printBox('Situação / vencimento',`${p.paymentStatus==='paid'?'Pago':'A pagar'} · ${dateBR(p.dueDate)}`),
+      printBox('Situação / vencimento',`${p.paymentStatus==='paid'?'Pago':p.paymentStatus==='partial'?'Pagamento parcial':'A pagar'} · ${dateBR(p.dueDate)}`),
       printBox('Entrega / retirada',deliveryLabel(p.deliveryType)),printBox('Local',p.deliveryLocation||'Não informado')
     ].join(''));
     const broker=p.brokerName?printSection('Corretor e corretagem',[
@@ -789,7 +776,7 @@
     $('#invoiceContacts').value=draft.contacts??db.settings.invoiceContacts??'';
     renderInvoiceLocationOptions(draft.unloadingLocation||null);renderInvoiceBuyerPreview();
     $('#invoiceReprintBtn').hidden=!p.invoiceIssued;
-    $('#invoiceModal').showModal();
+    $('#invoiceModal').showModal();$('#invoiceModal').scrollTop=0;
   }
 
   function collectInvoiceForm() {
@@ -854,6 +841,95 @@
   function exportBackup(){const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`bracoffee-backup-${todayISO()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('Backup exportado');}
   function importBackup(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const data=JSON.parse(r.result);if(!data||!Array.isArray(data.purchases)||!Array.isArray(data.stockLots))throw new Error('inválido');if(!confirm('Importar este backup? Os dados atuais serão substituídos.'))return;db=migrateDB({...defaultDB(),...data,schemaVersion:data.schemaVersion||1,settings:{...defaultDB().settings,...(data.settings||{})}}).data;saveDB();toast('Backup importado');$('#settingsModal').close();}catch(e){toast('Arquivo inválido','Não foi possível importar este backup.','error');}};r.readAsText(file);}
 
+  function icon(name) {
+    const paths={home:'M3 10 12 3l9 7v11h-6v-7H9v7H3Z',plus:'M12 5v14M5 12h14',coffee:'M4 8h12v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4ZM16 9h2a3 3 0 0 1 0 6h-2M7 3v2M11 3v2M15 3v2',file:'M14 3H5v18h14V8ZM14 3v5h5M8 12h8M8 16h5',box:'m3 7 9-4 9 4v11l-9 4-9-4ZM3 7l9 4 9-4M12 11v11M7 5l9 4',wallet:'M20 8H4V5h14v3M4 8v13h17V8ZM17 12h4v5h-4a2.5 2.5 0 0 1 0-5Z',users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM17 4a4 4 0 0 1 0 7M18 15a4 4 0 0 1 4 4v2',settings:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM10 2h4l1 3 3 1 3 3-1 3 1 3-3 3-3 1-1 3h-4l-1-3-3-1-3-3 1-3-1-3 3-3 3-1Z',search:'M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM15 15l6 6',calendar:'M4 5h16v16H4ZM4 10h16M8 3v4M16 3v4',logout:'M9 4H4v16h5M10 12h11M17 8l4 4-4 4',arrowLeft:'M20 12H4M10 6l-6 6 6 6',arrowRight:'M4 12h16M14 6l6 6-6 6',arrowUpRight:'M5 19 19 5M5 5h14v14',chevronDown:'m6 9 6 6 6-6',check:'m5 12 4 4L19 6',shield:'m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6ZM8 12l3 3 5-6',download:'M12 3v12M7 10l5 5 5-5M4 16v5h16v-5',menu:'M4 6h16M4 12h16M4 18h16',clock:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7v5l3 2',activity:'M3 12h4l3-8 4 16 3-8h4'};
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.file}"></path></svg>`;
+  }
+  function hydrateIcons(){
+    const map={dashboard:'home',balcao:'plus',provas:'coffee',compras:'file',estoque:'box',financeiro:'wallet',produtores:'users'};
+    $$('[data-page]').forEach(b=>{const target=$('.nav-icon',b)||$('span',b);if(target)target.innerHTML=icon(map[b.dataset.page]);});
+    $$('[data-icon]').forEach(el=>{el.innerHTML=icon(el.dataset.icon);});
+  }
+  function statHTML(label,value,help,type='file',go=''){
+    return `<${go?'button':'div'} class="stat-card" ${go?`data-goto="${go}"`:''}><div class="stat-top"><span class="stat-label">${esc(label)}</span><span class="stat-icon">${icon(type)}</span></div><div class="stat-value">${esc(value)}</div><div class="stat-help">${esc(help)}${go?icon('arrowUpRight'):''}</div></${go?'button':'div'}>`;
+  }
+  function renderDashboard(){
+    const month=$('#dashboardMonth').value||todayISO().slice(0,7),purchases=db.purchases.filter(p=>p.date?.startsWith(month));
+    const stock=physicalStockLots().reduce((s,l)=>s+Number(l.remaining||0),0),allFinance=db.finance.filter(f=>f.type==='payable');
+    const amount=purchases.reduce((s,p)=>s+Number(p.total||0),0),bags=purchases.reduce((s,p)=>s+Number(p.bags||0),0),pending=allFinance.reduce((s,f)=>s+pendingFor(f),0);
+    $('#dashboardDate').textContent=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    $('#dashboardStats').innerHTML=statHTML('Contratado no mês',money(amount),`${purchases.length} ordens de compra`,'file','compras')+statHTML('Sacas negociadas',num(bags),`Compras do mês selecionado`,'coffee','compras')+statHTML('Estoque disponível',num(stock)+' sc','Café fisicamente recebido','box','estoque')+statHTML('Saldo a pagar',money(pending),'Todas as compras em aberto','wallet','financeiro');
+    const recent=[...db.purchases].sort((a,b)=>(b.createdAt||b.date||'').localeCompare(a.createdAt||a.date||'')).slice(0,5);
+    $('#recentPurchases').innerHTML=recent.length?recent.map(p=>`<button class="list-row" data-purchase-open="${esc(p.id)}"><span class="order-mark">${icon('file')}</span><span class="list-row-copy"><span class="oc-label">${esc(p.oc)}</span><strong>${esc(p.sellerName)}</strong><small>${num(p.bags)} sc · ${esc(p.drink)} · ${dateBR(p.date)}</small></span><span class="amount">${money(p.total)}<span>${badge(p.paymentStatus)}</span></span><span class="row-arrow">${icon('arrowUpRight')}</span></button>`).join(''):emptyHTML('Seu primeiro negócio começa aqui','Registre uma compra para acompanhar sua operação.');
+    const groups=stockByDrink(),total=groups.reduce((s,g)=>s+g.total,0);
+    $('#stockSummary').innerHTML=groups.length?groups.slice(0,6).map(g=>`<div class="stock-line"><div class="stock-line-top"><strong>${esc(g.drink)}</strong><span>${num(g.total)} <small>sc</small></span></div><div class="stock-bar"><i style="width:${total?g.total/total*100:0}%"></i></div></div>`).join(''):emptyHTML('Aguardando café no armazém','Receba uma OC para formar o estoque físico.');
+    const base=new Date(month+'-01T12:00:00'),months=[];
+    for(let i=5;i>=0;i--){const d=new Date(base);d.setMonth(d.getMonth()-i);const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');months.push({key,label:d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''),bags:db.purchases.filter(p=>p.date?.startsWith(key)).reduce((s,p)=>s+Number(p.bags||0),0)});}
+    const max=Math.max(1,...months.map(m=>m.bags));
+    $('#volumeChart').innerHTML=`<div class="chart-top"><strong>${num(bags)}<span> sacas</span></strong><small>no mês selecionado</small></div><div class="chart-bars">${months.map(m=>`<div class="chart-column ${m.key===month?'current':''}"><small>${num(m.bags)}</small><div class="chart-track"><div class="chart-bar" style="height:${m.bags?Math.max(4,m.bags/max*100):2}%" title="${esc(m.label)}: ${num(m.bags)} sacas"></div></div><span>${esc(m.label)}</span></div>`).join('')}</div>`;
+    const actions=[];
+    allFinance.filter(f=>pendingFor(f)>0&&f.dueDate&&f.dueDate<todayISO()).sort((a,b)=>a.dueDate.localeCompare(b.dueDate)).forEach(f=>actions.push({type:'wallet',title:'Pagamento vencido',detail:`${f.person} · ${money(pendingFor(f))}`,attrs:`data-finance-toggle="${esc(f.id)}"`,tone:'late'}));
+    db.purchases.filter(p=>!p.invoiceIssued).slice().reverse().forEach(p=>actions.push({type:'file',title:'Emitir instrução de faturamento',detail:`${p.oc} · ${p.sellerName}`,attrs:`data-invoice-open="${esc(p.id)}"`,tone:'documents'}));
+    eligibleStockPurchases().slice().reverse().forEach(p=>actions.push({type:'box',title:'Acompanhar recebimento',detail:`${p.oc} · ${num(remainingToReceive(p))} sc pendentes`,attrs:`data-purchase-open="${esc(p.id)}"`,tone:'receipt'}));
+    const samples=db.samples.filter(s=>s.status==='pending');if(samples.length)actions.push({type:'coffee',title:'Provas em análise',detail:`${samples.length} prova(s) aguardando classificação`,attrs:'data-goto="provas"',tone:'sample'});
+    $('#actionCount').textContent=actions.length;
+    $('#operatingActions').innerHTML=actions.length?actions.slice(0,4).map(a=>`<button class="operating-action ${a.tone}" ${a.attrs}><span class="action-icon">${icon(a.type)}</span><span><strong>${esc(a.title)}</strong><small>${esc(a.detail)}</small></span>${icon('arrowRight')}</button>`).join(''):emptyHTML('Tudo organizado por aqui','Suas próximas ações aparecem neste painel.');
+  }
+  function updatePurchaseSummary(){
+    if(!$('#purchaseSummaryBody'))return;
+    const name=$('#sellerName').value.trim(),drink=$('#purchaseDrink').value.trim(),bags=Number($('#purchaseBags').value||0),price=Number($('#purchasePrice').value||0);
+    $('#purchaseTotal').textContent=money(roundMoney(bags*price));
+    $('#purchaseMobileTotal').textContent=money(roundMoney(bags*price));
+    $('#purchaseSummaryBody').innerHTML=`<h3>${esc(name||'Seu próximo fornecedor')}</h3><p>${esc(drink||'Café a definir')}</p><dl><div><dt>Quantidade</dt><dd>${num(bags)} sc</dd></div><div><dt>Preço por saca</dt><dd>${money(price)}</dd></div><div><dt>Destino</dt><dd>${esc(destinationLabel($('#purchaseDestination').value))}</dd></div>${$('#purchaseHasBroker').value==='yes'?`<div><dt>Corretor</dt><dd>${esc($('#purchaseBrokerName').value||'A informar')}</dd></div>`:''}</dl>`;
+    const fields=[['Fornecedor',Boolean(name)],['Café e quantidade',Boolean(drink&&bags>0)],['Data da compra',Boolean($('#purchaseDate').value)]];
+    $('#purchaseChecklist').innerHTML=fields.map(([label,ok])=>`<div class="${ok?'complete':''}"><i>${ok?icon('check'):''}</i>${esc(label)}</div>`).join('');
+    $('.draft-badge').textContent=$('#purchaseForm').dataset.editingId?'EDIÇÃO DA OC':'RASCUNHO';
+    $$('.summary-submit,.purchase-mobile-buttons [type="submit"]').forEach(b=>{b.innerHTML=icon('check')+($('#purchaseForm').dataset.editingId?' Salvar alterações':' Finalizar compra');});
+  }
+  function renderFinance(){
+    const all=db.finance.filter(f=>f.type==='payable'),month=$('#financeMonth').value||todayISO().slice(0,7),pending=all.reduce((s,f)=>s+pendingFor(f),0),paidMonth=all.reduce((sum,f)=>sum+(f.payments||[]).filter(p=>!p.reversedAt&&p.date?.startsWith(month)).reduce((s,p)=>s+Number(p.amount||0),0),0),late=all.filter(f=>pendingFor(f)>0&&f.dueDate&&f.dueDate<todayISO());
+    $('#financeStats').innerHTML=statHTML('Saldo a pagar',money(pending),'Todas as compras em aberto','wallet')+statHTML('Pago no mês',money(paidMonth),'Conforme a data de cada pagamento','check')+statHTML('Vencido',money(late.reduce((s,f)=>s+pendingFor(f),0)),`${late.length} conta(s) vencida(s)`,'clock')+statHTML('Compras quitadas',String(all.filter(f=>f.status==='paid').length),`${all.length} contas no histórico`,'file');
+    const q=normalize($('#financeSearch').value),filter=$('#financeFilter').value;
+    const rows=all.slice().filter(f=>(!q||normalize(`${f.oc} ${f.person}`).includes(q))&&(filter==='all'||(filter==='pending'?pendingFor(f)>0:filter==='late'?pendingFor(f)>0&&f.dueDate&&f.dueDate<todayISO():f.status===filter))).sort((a,b)=>{const al=a.dueDate&&a.dueDate<todayISO()&&pendingFor(a)>0,bl=b.dueDate&&b.dueDate<todayISO()&&pendingFor(b)>0;return Number(bl)-Number(al)||(b.date||'').localeCompare(a.date||'');});
+    $('#financeList').innerHTML=rows.length?rows.map(f=>{const percent=f.amount>0?Math.min(100,paidFor(f)/f.amount*100):0;return `<div class="data-card finance-card"><div class="main-info"><span class="oc-label">${esc(f.oc)}</span><strong>${esc(f.person)}</strong><small>Vencimento ${dateBR(f.dueDate)}${pendingFor(f)>0&&f.dueDate&&f.dueDate<todayISO()?' · <b class="late-text">Vencida</b>':''}</small></div><div class="finance-values"><div><label>Total da compra</label><strong>${money(f.amount)}</strong></div><div><label>Pago</label><strong class="paid-value">${money(paidFor(f))}</strong></div><div><label>Saldo a pagar</label><strong>${money(pendingFor(f))}</strong></div><div class="payment-progress"><i style="width:${percent}%"></i></div></div><div class="card-actions">${badge(f.status)}<button class="mini-btn ${pendingFor(f)>0?'primary':''}" data-finance-toggle="${esc(f.id)}">${pendingFor(f)>0?'Registrar pagamento':'Ver pagamentos'}</button><button class="mini-btn" data-purchase-open="${esc(f.purchaseId)}">Ver OC</button></div></div>`;}).join(''):emptyHTML('Nenhuma conta neste filtro','As compras criam o financeiro automaticamente.');
+  }
+  function toggleFinance(id){openPayment(id);}
+  function openPayment(id){
+    const f=db.finance.find(f=>f.id===id);if(!f)return;activeFinanceId=id;
+    $('#paymentOc').textContent=f.oc+' · '+f.person;const remaining=pendingFor(f);
+    $('#paymentSummary').innerHTML=`<div><small>Total da compra</small><strong>${money(f.amount)}</strong></div><div><small>Já pago</small><strong class="paid-value">${money(paidFor(f))}</strong></div><div><small>Saldo a pagar</small><strong>${money(remaining)}</strong></div>`;
+    $('#paymentAmount').value=remaining.toFixed(2);$('#paymentAmount').max=remaining.toFixed(2);$('#paymentDate').value=todayISO();$('#paymentMethod').value=f.method||'PIX';$('#paymentNotes').value='';
+    $('#paymentEntryFields').hidden=remaining<=0;$('#paymentSaveBtn').hidden=remaining<=0;$$('input,select',$('#paymentEntryFields')).forEach(el=>{el.disabled=remaining<=0;});
+    $('#paymentHistory').innerHTML=(f.payments||[]).length?(f.payments||[]).slice().reverse().map(p=>`<div class="payment-history-row ${p.reversedAt?'reversed':''}"><span class="history-dot"></span><div><strong>${money(p.amount)} ${p.reversedAt?'<span class="badge gray">Estornado</span>':''}</strong><small>${p.date?dateBR(p.date):'Data não registrada'} · ${esc(p.method||'Não informado')}${p.notes?' · '+esc(p.notes):''}</small></div>${p.reversedAt?'':`<button type="button" class="text-btn" data-payment-reverse="${esc(p.id)}">Estornar</button>`}</div>`).join(''):emptyHTML('Nenhum pagamento registrado','Registre uma parcela ou quite o saldo da compra.');
+    if(!$('#paymentModal').open){$('#paymentModal').showModal();$('#paymentModal').scrollTop=0;}
+  }
+  function savePayment(){
+    const f=db.finance.find(f=>f.id===activeFinanceId);if(!f)return;
+    const amount=roundMoney($('#paymentAmount').value),remaining=pendingFor(f),date=$('#paymentDate').value;
+    if(!Number.isFinite(amount)||amount<=0||amount>remaining||!date){toast('Confira o pagamento',`Informe uma data e um valor entre R$ 0,01 e ${money(remaining)}.`,'error');return;}
+    f.payments.push({id:uid('payment'),amount,date,method:$('#paymentMethod').value,notes:$('#paymentNotes').value.trim(),createdAt:new Date().toISOString()});reconcileFinance(f);saveDB();$('#paymentModal').close();toast('Pagamento registrado',`${money(amount)} · saldo ${money(pendingFor(f))}`);
+    if($('#purchaseDetailModal').open&&activePurchaseId===f.purchaseId)renderPurchaseDetail(f.purchaseId,false);
+  }
+  function reversePayment(id){
+    const f=db.finance.find(f=>f.id===activeFinanceId),payment=f?.payments?.find(p=>p.id===id);if(!payment||payment.reversedAt)return;
+    if(!confirm(`Estornar o pagamento de ${money(payment.amount)}? O saldo será reaberto e o histórico será preservado.`))return;
+    payment.reversedAt=new Date().toISOString();reconcileFinance(f);saveDB();openPayment(f.id);toast('Pagamento estornado');
+    if($('#purchaseDetailModal').open&&activePurchaseId===f.purchaseId)renderPurchaseDetail(f.purchaseId,false);
+  }
+  function producerPurchases(id){return db.purchases.filter(p=>p.producerId===id);}
+  function openProducerProfile(id){
+    const p=db.producers.find(p=>p.id===id);if(!p)return;activeProducerId=id;
+    const purchases=producerPurchases(id),ids=new Set(purchases.map(p=>p.id)),finance=db.finance.filter(f=>ids.has(f.purchaseId));
+    $('#producerProfileName').textContent=p.name;
+    $('#producerProfileBody').innerHTML=`<div class="supplier-contact">${partyHTML(p)}${p.phone?`<p>Telefone: ${esc(p.phone)}</p>`:''}</div><div class="supplier-stats">${statHTML('Comprado',money(purchases.reduce((s,p)=>s+Number(p.total||0),0)),`${purchases.length} negociações`,'file')}${statHTML('Já pago',money(finance.reduce((s,f)=>s+paidFor(f),0)),'Pagamentos registrados','check')}${statHTML('Saldo a pagar',money(finance.reduce((s,f)=>s+pendingFor(f),0)),'Contas deste fornecedor','wallet')}</div><p class="eyebrow">HISTÓRICO DE COMPRAS</p><div class="supplier-history">${purchases.length?purchases.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>`<button class="list-row" data-purchase-open="${esc(p.id)}"><span class="list-row-copy"><span class="oc-label">${esc(p.oc)}</span><strong>${num(p.bags)} sc · ${esc(p.drink)}</strong><small>${dateBR(p.date)}</small></span><span class="amount">${money(p.total)}</span>${icon('arrowUpRight')}</button>`).join(''):emptyHTML('Ainda sem compras','A próxima negociação aparecerá aqui.')}</div>`;
+    $('#producerProfileModal').showModal();$('#producerProfileModal').scrollTop=0;
+  }
+  function buyFromProducer(id){const p=db.producers.find(p=>p.id===id);if(!p)return;resetPurchaseForm();$('#sellerName').value=p.name;fillSellerFromProducer();$('#producerProfileModal').close();navigate('balcao');updatePurchaseSummary();}
+  function renderProducers(){
+    const q=normalize($('#producerSearch').value),rows=db.producers.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).filter(p=>!q||normalize(`${p.name} ${p.doc} ${p.phone} ${p.city} ${p.farm}`).includes(q));
+    $('#producersList').innerHTML=rows.length?rows.map(p=>{const orders=producerPurchases(p.id),ids=new Set(orders.map(p=>p.id)),balance=db.finance.filter(f=>ids.has(f.purchaseId)).reduce((s,f)=>s+pendingFor(f),0);const initials=p.name.split(' ').filter(Boolean).slice(0,2).map(n=>n[0]).join('');return `<div class="data-card supplier-card"><span class="supplier-avatar">${esc(initials)}</span><div class="main-info"><strong>${esc(p.name)}</strong><small>${esc(p.doc||p.farm||'Documento não informado')} · ${esc(p.city||'Cidade não informada')}</small></div><div class="data-meta"><label>Compras</label><strong>${orders.length}</strong></div><div class="data-meta"><label>Saldo a pagar</label><strong>${money(balance)}</strong></div><div class="card-actions"><button class="mini-btn primary" data-producer-profile="${esc(p.id)}">Abrir ficha</button><button class="mini-btn" data-producer-edit="${esc(p.id)}">Editar</button><button class="mini-btn" data-producer-delete="${esc(p.id)}">Excluir</button></div></div>`;}).join(''):emptyHTML('Seus fornecedores ficam aqui','O cadastro também é feito automaticamente no balcão.');
+  }
+
   function bindEvents(){
     $('#logoutBtn')?.addEventListener('click', logoutApp);
     document.addEventListener('click',e=>{
@@ -863,17 +939,40 @@
       const so=e.target.closest('[data-sample-edit]');if(so)openSampleModal(db.samples.find(s=>s.id===so.dataset.sampleEdit));
       const sb=e.target.closest('[data-sample-buy]');if(sb)sampleToPurchase(sb.dataset.sampleBuy);
       const sd=e.target.closest('[data-sample-delete]');if(sd){const s=db.samples.find(x=>x.id===sd.dataset.sampleDelete);if(s&&confirm(`Excluir a prova de ${s.name}?`)){db.samples=db.samples.filter(x=>x.id!==s.id);saveDB();toast('Prova excluída');}}
-      const po=e.target.closest('[data-purchase-open]');if(po)openPurchaseDetail(po.dataset.purchaseOpen);
+      const po=e.target.closest('[data-purchase-open]');if(po){$('#producerProfileModal').close();openPurchaseDetail(po.dataset.purchaseOpen);}
+      const io=e.target.closest('[data-invoice-open]');if(io)openInvoice(io.dataset.invoiceOpen);
       const ls=e.target.closest('[data-lot-sell]');if(ls)openSaleModal(ls.dataset.lotSell);
       const sr=e.target.closest('[data-stock-receive]');if(sr)openStockEntryModal(sr.dataset.stockReceive);
       const ft=e.target.closest('[data-finance-toggle]');if(ft)toggleFinance(ft.dataset.financeToggle);
       const pe=e.target.closest('[data-producer-edit]');if(pe)openProducerModal(db.producers.find(p=>p.id===pe.dataset.producerEdit));
       const pd=e.target.closest('[data-producer-delete]');if(pd)deleteProducer(pd.dataset.producerDelete);
+      const pp=e.target.closest('[data-producer-profile]');if(pp)openProducerProfile(pp.dataset.producerProfile);
+      const pr=e.target.closest('[data-payment-reverse]');if(pr)reversePayment(pr.dataset.paymentReverse);
       const le=e.target.closest('[data-location-edit]');if(le)openUnloadingLocation(le.dataset.locationEdit);
       const ld=e.target.closest('[data-location-delete]');if(ld)deleteUnloadingLocation(ld.dataset.locationDelete);
     });
 
     $('#quickBuyBtn').addEventListener('click',()=>navigate('balcao'));
+    $('#backPageBtn').addEventListener('click',()=>navigate('dashboard'));
+    $('#navSearchBtn').addEventListener('click',()=>{navigate('compras');$('#purchaseSearch').focus();});
+    $('#dashboardMonth').addEventListener('change',renderDashboard);
+    $('#financeMonth').addEventListener('change',renderFinance);
+    $('#purchaseDestinationFilter').addEventListener('change',renderPurchases);
+    $('#purchaseMonth').addEventListener('change',renderPurchases);
+    $('#purchaseForm').addEventListener('input',updatePurchaseSummary);
+    $('#purchaseForm').addEventListener('change',updatePurchaseSummary);
+    $('#clearPurchaseAsideBtn').addEventListener('click',()=>{if(confirm('Limpar os dados desta negociação?'))resetPurchaseForm();});
+    $('#paymentForm').addEventListener('submit',e=>{e.preventDefault();savePayment();});
+    $('#producerProfileBuyBtn').addEventListener('click',()=>buyFromProducer(activeProducerId));
+    $('#producerProfileEditBtn').addEventListener('click',()=>{$('#producerProfileModal').close();openProducerModal(db.producers.find(p=>p.id===activeProducerId));});
+    $('#mobileMoreBtn').addEventListener('click',()=>$('#moreMenuModal').showModal());
+    $('#moreSettingsBtn').addEventListener('click',()=>{$('#moreMenuModal').close();openSettings();});
+    $('#moreBackupBtn').addEventListener('click',()=>{$('#moreMenuModal').close();exportBackup();});
+    $('#moreLogoutBtn').addEventListener('click',logoutApp);
+    ['#downloadRescueBtn','#settingsRescueBtn'].forEach(sel=>$(sel).addEventListener('click',downloadRescuedCopy));
+    $('#resolveSyncBtn').addEventListener('click',async()=>{try{await window.BracoffeeSync.resolveConflict();$('#syncConflictModal').close();toast('Dados atualizados','Sua cópia anterior continua disponível em Configurações.');}catch{toast('Não foi possível atualizar','Confira sua conexão e tente novamente.','error');}});
+    $('#syncConflictModal').addEventListener('cancel',e=>e.preventDefault());
+    document.addEventListener('keydown',e=>{if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('dialog[open]')){e.preventDefault();navigate('compras');$('#purchaseSearch').focus();}});
     $('#sellerName').addEventListener('change',fillSellerFromProducer);
     ['#purchaseBags','#purchasePrice','#purchaseNY','#purchaseUSD'].forEach(sel=>$(sel).addEventListener('input',updatePurchaseCalculations));
     $('#purchaseDeliveryType').addEventListener('change',updateDeliveryUI); $('#purchaseDestination').addEventListener('change',updateDestinationUI);
@@ -913,20 +1012,48 @@
     $('#settingsLocationsBtn').addEventListener('click',openUnloadingLocations);
     $('#detailEditBtn').addEventListener('click',()=>activePurchaseId&&editPurchase(activePurchaseId));
     $('#detailDeleteBtn').addEventListener('click',()=>activePurchaseId&&deletePurchase(activePurchaseId));
-    $('#detailPayBtn').addEventListener('click',()=>{const p=db.purchases.find(x=>x.id===activePurchaseId);if(p)setPurchasePaid(p.id,p.paymentStatus!=='paid');});
+    $('#detailPayBtn').addEventListener('click',()=>{const p=db.purchases.find(x=>x.id===activePurchaseId);if(p)openPayment(p.financeId);});
 
     $('#openSettingsBtn').addEventListener('click',openSettings); $('#settingsForm').addEventListener('submit',e=>{e.preventDefault();saveSettings();});
     $('#openSettingsMobileBtn').addEventListener('click',openSettings);
     $('#exportBackupBtn').addEventListener('click',exportBackup); $('#settingsExportBtn').addEventListener('click',exportBackup); $('#importBackupBtn').addEventListener('click',()=>$('#backupFileInput').click()); $('#backupFileInput').addEventListener('change',e=>importBackup(e.target.files[0]));
 
-    $$('dialog').forEach(d=>d.addEventListener('click',e=>{const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}));
+    $$('dialog').filter(d=>d.id!=='syncConflictModal').forEach(d=>d.addEventListener('click',e=>{const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}));
+    $$('[data-goto]').forEach(b=>b.addEventListener('click',()=>$('#moreMenuModal').close()));
   }
 
-  function init(){
+  function showSyncStatus(status){
+    const labels={loading:'Carregando',saved:'Tudo salvo',saving:'Salvando',offline:'Sem conexão',conflict:'Revisar atualização'};
+    $('#syncStatus').dataset.state=status;$('#syncStatus span').textContent=labels[status]||status;
+    const banner=$('#connectionBanner');banner.hidden=!['offline','conflict'].includes(status);
+    banner.textContent=status==='offline'?'Sem conexão. Consulte os dados salvos e reconecte para registrar alterações.':'Os dados foram atualizados em outro aparelho. Confira a atualização para continuar.';
+  }
+  function downloadRescuedCopy(){const data=window.BracoffeeSync.rescued;if(!data)return;downloadJSON(data,'bracoffee-copia-preservada-'+todayISO()+'.json');}
+  function downloadJSON(data,filename){const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+  function normalizeDB(data){return migrateDB({...defaultDB(),...data,schemaVersion:data.schemaVersion||1,settings:{...defaultDB().settings,...(data.settings||{})}}).data;}
+  async function init(){
+    hydrateIcons();
     $('#purchaseDate').value=todayISO();
+    $('#dashboardMonth').value=todayISO().slice(0,7);$('#financeMonth').value=todayISO().slice(0,7);
+    const local=db;
+    const incoming=await window.BracoffeeSync.connect(local,{
+      onStatus:showSyncStatus,
+      onConflict:()=>{if(!$('#syncConflictModal').open)$('#syncConflictModal').showModal();},
+      onRescue:()=>{$('#rescueBackupPanel').hidden=false;},
+      isEditing:()=>Boolean($('dialog[open]')||$('#page-balcao').classList.contains('active')),
+      onRemote:(data,force)=>{db=normalizeDB(data);if(force){$$('dialog').forEach(d=>d.close());resetPurchaseForm();}renderAll();}
+    });
+    const sourceVersion=Number(incoming.schemaVersion||1);
+    db=normalizeDB(incoming);
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(db));}catch{}
+    if(window.BracoffeeSync.canWrite&&sourceVersion<3)window.BracoffeeSync.queue(db);
     updateDeliveryUI(); updateDestinationUI(); updateBrokerUI();
     bindEvents();
     renderAll();
+    $('#appLoading').hidden=true;$('#rescueBackupPanel').hidden=!window.BracoffeeSync.rescued;
+    if(window.BracoffeeSync.status==='conflict'&&!$('#syncConflictModal').open)$('#syncConflictModal').showModal();
+    const guard=e=>{const target=e.target;const mutation=e.type==='submit'||(e.type==='click'&&target.closest('[data-sample-delete],[data-producer-delete],[data-location-delete],[data-payment-reverse],#detailDeleteBtn,#importBackupBtn'))||(e.type==='change'&&target.id==='backupFileInput');if(mutation&&!window.BracoffeeSync.canWrite){e.preventDefault();e.stopImmediatePropagation();toast('Aguarde para registrar alterações',window.BracoffeeSync.status==='conflict'?'Carregue a versão atual dos dados.':'Confira a conexão e tente novamente.','error');}};
+    ['submit','click','change'].forEach(type=>document.addEventListener(type,guard,true));
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister())).catch(()=>{});
     }

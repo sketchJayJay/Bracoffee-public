@@ -4,6 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const DataStore = require('./data-store');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 80);
@@ -13,6 +14,7 @@ const SESSION_SECRET = process.env.SESSION_SECRET || 'bracoffee-change-this-secr
 const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 43200); // 12h
 const COOKIE_NAME = 'bracoffee_session';
 const loginAttempts = new Map();
+const store = new DataStore(process.env.DATA_DIR || path.join(ROOT, 'data'));
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -20,7 +22,7 @@ const MIME = {
   '.js': 'application/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-  '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webp': 'image/webp'
+  '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webp': 'image/webp', '.woff2': 'font/woff2'
 };
 
 function b64url(input) {
@@ -91,12 +93,12 @@ function registerFailure(ip) {
   else item.count += 1;
 }
 function clearFailures(ip) { loginAttempts.delete(ip); }
-function readBody(req) {
+function readBody(req, maxBytes = 16 * 1024) {
   return new Promise((resolve, reject) => {
     let data = '';
     req.on('data', chunk => {
       data += chunk;
-      if (data.length > 16 * 1024) { reject(new Error('body-too-large')); req.destroy(); }
+      if (Buffer.byteLength(data) > maxBytes) { reject(new Error('body-too-large')); req.destroy(); }
     });
     req.on('end', () => resolve(data));
     req.on('error', reject);
@@ -119,13 +121,7 @@ function serveFile(res, filePath, cache = false) {
     fs.createReadStream(filePath).pipe(res);
   });
 }
-function loginHtml(message = '') {
-  const error = message ? `<div class="error">${message}</div>` : '';
-  return `<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#221e1b"><title>BRACOFFEE | Login</title><style>
-:root{--brown:#8a6035;--brown2:#6f4c2c;--gold:#d9c197;--ink:#28211c;--muted:#756b62;--line:#e5dbcf}*{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:radial-gradient(circle at 18% 8%,rgba(217,193,151,.17),transparent 30%),linear-gradient(145deg,#191614 0%,#271f1a 58%,#493321 100%);display:grid;place-items:center;padding:22px;color:var(--ink)}.card{width:min(440px,100%);background:#fffdfa;border:1px solid rgba(255,255,255,.17);border-radius:28px;padding:34px;box-shadow:0 30px 90px rgba(0,0,0,.34)}.brand{text-align:center;margin-bottom:27px}.brand img{width:min(285px,82%);height:auto;display:block;margin:0 auto 12px}.brand p{margin:0;color:var(--muted);font-size:12px;font-weight:850;letter-spacing:.16em;text-transform:uppercase}.field{display:flex;flex-direction:column;gap:8px;margin-bottom:15px}.field span{font-size:13px;font-weight:800;color:#554b43}.field input{width:100%;border:1px solid var(--line);background:#fff;border-radius:13px;padding:13px 14px;outline:none;font:inherit;color:var(--ink)}.field input:focus{border-color:#ba9369;box-shadow:0 0 0 4px rgba(186,147,105,.13)}.pw{position:relative}.pw input{padding-right:84px}.show{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:#f2ece4;color:#654a30;border-radius:9px;padding:7px 9px;font-weight:800;cursor:pointer}.submit{width:100%;border:0;border-radius:13px;background:var(--brown);color:#fff;padding:13px 16px;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 9px 24px rgba(138,96,53,.2)}.submit:hover{background:var(--brown2)}.error{background:#fcebe8;color:#a5483f;border:1px solid #efcbc6;border-radius:11px;padding:10px 12px;margin:2px 0 14px;font-size:12px;font-weight:800}.foot{text-align:center;color:#9a8f84;font-size:11px;margin-top:19px}.secure{display:flex;align-items:center;justify-content:center;gap:6px;color:#71665c;font-size:12px;margin:0 0 22px}.dot{width:8px;height:8px;border-radius:50%;background:#4d956e}@media(max-width:560px){.card{padding:26px 20px;border-radius:22px}.brand img{width:min(245px,80%)}}
-</style></head><body><main class="card"><div class="brand"><img src="/bracoffee_logo.png" alt="BRACOFFEE"><p>Gestão de Café</p></div><div class="secure"><i class="dot"></i>Acesso restrito</div>${error}<form method="post" action="/api/login" autocomplete="on"><label class="field"><span>Usuário</span><input name="username" autocomplete="username" autofocus required placeholder="Digite seu usuário"></label><label class="field"><span>Senha</span><div class="pw"><input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Digite sua senha"><button class="show" type="button" id="toggle">Mostrar</button></div></label><button class="submit" type="submit">Entrar no sistema</button></form><div class="foot">BRACOFFEE • acesso protegido</div></main><script>document.getElementById('toggle').onclick=()=>{const p=document.getElementById('password'),b=document.getElementById('toggle');p.type=p.type==='password'?'text':'password';b.textContent=p.type==='password'?'Mostrar':'Ocultar'};if('serviceWorker'in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));caches?.keys?.().then(ks=>ks.forEach(k=>caches.delete(k))).catch(()=>{})}</script></body></html>`;
-}
+const loginHtml = require('./login-template');
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -184,7 +180,24 @@ const server = http.createServer(async (req, res) => {
     return acceptsHtml ? redirect(res, '/login') : send(res, 401, 'Não autorizado.');
   }
 
+  if (pathname === '/api/data' && req.method === 'GET') {
+    const state=store.read();
+    if(url.searchParams.get('instanceId')===state.instanceId&&url.searchParams.has('revision')&&Number(url.searchParams.get('revision'))===state.revision)return send(res,304,'','application/json',{'Cache-Control':'no-store'});
+    return send(res,200,JSON.stringify(state),'application/json; charset=utf-8',{'Cache-Control':'no-store'});
+  }
+  if (pathname === '/api/data' && req.method === 'PUT') {
+    try {
+      if(req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)return send(res,403,'{"error":"Origem inválida."}','application/json');
+      const body=JSON.parse(await readBody(req,12*1024*1024));
+      const result=store.save(body.data,body.baseRevision,body.baseInstanceId);
+      return send(res,result.status,JSON.stringify(result.state||{error:result.error}),'application/json; charset=utf-8',{'Cache-Control':'no-store'});
+    }catch{return send(res,400,'{"error":"Não foi possível salvar os dados."}','application/json');}
+  }
+  if (pathname.startsWith('/api/')) return send(res,404,'{"error":"Não encontrado."}','application/json');
+
   let requested = pathname === '/' ? '/index.html' : pathname;
+  const publicFiles=['/index.html','/app.js','/sync.js','/styles.css','/manifest.json','/bracoffee_logo.png','/icon-192.png','/icon-512.png'];
+  if(!publicFiles.includes(requested))return send(res,404,'Não encontrado.');
   let filePath = path.resolve(ROOT, '.' + requested);
   if (!filePath.startsWith(path.resolve(ROOT) + path.sep)) return send(res, 403, 'Acesso negado.');
   if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) return serveFile(res, filePath, false);
