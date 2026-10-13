@@ -5,7 +5,7 @@
   "display": "standalone",
   "background_color": "#f5f4f0",
   "theme_color": "#292721",
-  "description": "Seu escritório de café: provas, compras, documentos, recebimentos e pagamentos.",
+  "description": "Seu escritório de café: compras, estoque, vendas, guias de armazém e financeiro.",
   "icons": [
     {
       "src": "icon-192.png",

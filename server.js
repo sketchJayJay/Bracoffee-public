@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const DataStore = require('./data-store');
+const Commercial = require('./commercial-core');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 80);
@@ -189,6 +190,20 @@ const server = http.createServer(async (req, res) => {
     try {
       if(req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)return send(res,403,'{"error":"Origem inválida."}','application/json');
       const body=JSON.parse(await readBody(req,12*1024*1024));
+      const prior=store.read();
+      if(body.baseRevision!==prior.revision||body.baseInstanceId!==prior.instanceId)return send(res,409,JSON.stringify(prior),'application/json');
+      const deletions=(prior.data?.stockLots||[]).filter(l=>!l.deletedAt&&!body.data?.stockLots?.some(n=>n.id===l.id&&!n.deletedAt));
+      if(deletions.length||body.restoreBackup===true){
+        const ip='delete:'+clientIp(req);
+        if(rateLimited(ip))return send(res,429,JSON.stringify({error:'Muitas tentativas. Aguarde alguns minutos.'}),'application/json');
+        if(!safeEqual(body.deletePassword||'',APP_PASSWORD)){registerFailure(ip);return send(res,403,JSON.stringify({error:'Senha incorreta. A base não foi alterada.'}),'application/json');}
+        clearFailures(ip);
+        for(const lot of body.restoreBackup===true?[]:deletions){
+          const next=body.data.stockLots.find(l=>l.id===lot.id);
+          if(!next||!next.deletedAt||!next.reversedAt||Number(next.remaining)!==0||Number(next.bags)!==Number(lot.bags))return send(res,400,JSON.stringify({error:'A exclusão deve preservar o registro do lote.'}),'application/json');
+          if(!lot.reversedAt){const copy=JSON.parse(JSON.stringify(prior.data));try{Commercial.reverseEntry(copy,lot.id,'Exclusão',new Date().toISOString());}catch(error){return send(res,400,JSON.stringify({error:error.message}),'application/json');}}
+        }
+      }
       const result=store.save(body.data,body.baseRevision,body.baseInstanceId);
       return send(res,result.status,JSON.stringify(result.state||{error:result.error}),'application/json; charset=utf-8',{'Cache-Control':'no-store'});
     }catch{return send(res,400,'{"error":"Não foi possível salvar os dados."}','application/json');}
@@ -196,7 +211,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname.startsWith('/api/')) return send(res,404,'{"error":"Não encontrado."}','application/json');
 
   let requested = pathname === '/' ? '/index.html' : pathname;
-  const publicFiles=['/index.html','/app.js','/sync.js','/styles.css','/manifest.json','/bracoffee_logo.png','/icon-192.png','/icon-512.png'];
+  const publicFiles=['/index.html','/app.js','/commercial-core.js','/sync.js','/styles.css','/manifest.json','/bracoffee_logo.png','/icon-192.png','/icon-512.png'];
   if(!publicFiles.includes(requested))return send(res,404,'Não encontrado.');
   let filePath = path.resolve(ROOT, '.' + requested);
   if (!filePath.startsWith(path.resolve(ROOT) + path.sep)) return send(res, 403, 'Acesso negado.');

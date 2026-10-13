@@ -2,6 +2,7 @@
 const fs=require('fs');
 const path=require('path');
 const crypto=require('crypto');
+const Commercial=require('./commercial-core');
 
 class DataStore {
   constructor(directory) {
@@ -30,6 +31,7 @@ class DataStore {
   save(data,baseRevision,baseInstanceId) {
     if(baseInstanceId!==this.state.instanceId||!Number.isInteger(baseRevision)||baseRevision!==this.state.revision)return {status:409,state:this.state};
     if(!this.validate(data))return {status:400,error:'Dados inválidos.'};
+    const issues=Commercial.audit(data);if(issues.length)return {status:400,error:issues.join(' ')};
     const previous=this.state;
     if(previous.data)fs.writeFileSync(path.join(this.backups,`version-${String(previous.revision).padStart(10,'0')}.json`),JSON.stringify(previous),{mode:0o600});
     const next={instanceId:previous.instanceId,revision:previous.revision+1,data,updatedAt:new Date().toISOString()};

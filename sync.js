@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const CACHE='bracoffee_db_v1',META='bracoffee_sync_v2',RESCUE='bracoffee_saved_copy_v2';
-  let revision=0,instanceId='',status='loading',queued=null,busy=false,latest=null,callbacks={};
+  let revision=0,instanceId='',status='loading',queued=null,busy=false,latest=null,callbacks={},exclusive=false;
   const readMeta=()=>{try{return JSON.parse(localStorage.getItem(META)||'null');}catch{return null;}};
   const records=data=>['purchases','samples','producers','stockLots','finance','sales'].reduce((sum,key)=>sum+(data?.[key]?.length||0),0);
   const cache=(key,value)=>{try{localStorage.setItem(key,value);}catch(error){console.warn('Cópia local indisponível',error);}};
@@ -75,7 +75,14 @@
     persistMeta(false);setStatus('saved');
     if(remote.data){cache(CACHE,JSON.stringify(remote.data));callbacks.onRemote?.(remote.data,true);}
   }
-  window.BracoffeeSync={connect,queue,refresh,resolveConflict,get status(){return status;},get canWrite(){return status==='saved'||status==='saving';},get rescued(){try{return JSON.parse(localStorage.getItem(RESCUE)||'null');}catch{return null;}},async whenIdle(){for(let n=0;n<50&&(busy||queued)&&status==='saving';n++)await new Promise(r=>setTimeout(r,100));}};
+  async function commitDeletion(data,password,restoreBackup=false){
+    await window.BracoffeeSync.whenIdle();
+    if(busy||queued||status!=='saved')throw Error('Aguarde a sincronização antes de excluir.');
+    busy=true;exclusive=true;setStatus('saving');
+    try{const result=await request({method:'PUT',body:JSON.stringify({baseRevision:revision,baseInstanceId:instanceId,data,deletePassword:password,restoreBackup})});revision=result.revision;instanceId=result.instanceId;cache(CACHE,JSON.stringify(data));persistMeta(false);setStatus('saved');callbacks.onRemote?.(data);}
+    catch(error){if(error.conflict){setStatus('conflict');callbacks.onConflict?.();}else setStatus('saved');throw error;}finally{busy=false;exclusive=false;}
+  }
+  window.BracoffeeSync={connect,queue,commitDeletion,refresh,resolveConflict,get status(){return status;},get canWrite(){return !exclusive&&(status==='saved'||status==='saving');},get rescued(){try{return JSON.parse(localStorage.getItem(RESCUE)||'null');}catch{return null;}},async whenIdle(){for(let n=0;n<50&&(busy||queued)&&status==='saving';n++)await new Promise(r=>setTimeout(r,100));}};
   addEventListener('online',()=>void refresh());addEventListener('focus',()=>void refresh());
   setInterval(()=>{if(document.visibilityState==='visible')void refresh();},15000);
 })();
