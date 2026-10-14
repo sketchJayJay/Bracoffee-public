@@ -6,10 +6,12 @@ const path = require('path');
 const crypto = require('crypto');
 const DataStore = require('./data-store');
 const Commercial = require('./commercial-core');
+const PurchaseAccess = require('./purchase-access');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 80);
 const APP_USER = process.env.APP_USER || 'admin';
+const PURCHASE_ACTION_PASSWORD=process.env.PURCHASE_ACTION_PASSWORD||'4317';
 const APP_PASSWORD = process.env.APP_PASSWORD || 'Bracoffee@2026';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'bracoffee-change-this-secret-in-coolify';
 const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 43200); // 12h
@@ -181,6 +183,9 @@ const server = http.createServer(async (req, res) => {
     return acceptsHtml ? redirect(res, '/login') : send(res, 401, 'Não autorizado.');
   }
 
+  if(pathname==='/api/purchase-permission'&&req.method==='POST'){
+    try{if(req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)return send(res,403,'{}','application/json');const ip='purchase-permission:'+clientIp(req);if(rateLimited(ip))return send(res,429,JSON.stringify({error:'Muitas tentativas. Aguarde alguns minutos.'}),'application/json');const body=JSON.parse(await readBody(req,8192));if(!['edit','delete'].includes(body.action)||!store.read().data?.purchases?.some(p=>p.id===body.id))return send(res,400,JSON.stringify({error:'Compra não encontrada.'}),'application/json');if(!safeEqual(body.password||'',PURCHASE_ACTION_PASSWORD)){registerFailure(ip);return send(res,403,JSON.stringify({error:'Senha incorreta. Nenhum registro foi alterado.'}),'application/json');}clearFailures(ip);return send(res,200,JSON.stringify(PurchaseAccess.issue(body.id,body.action,store.read().instanceId,SESSION_SECRET)),'application/json',{'Cache-Control':'no-store'});}catch{return send(res,400,JSON.stringify({error:'Não foi possível validar a senha.'}),'application/json');}
+  }
   if(pathname==='/api/backups'&&req.method==='GET')return send(res,200,JSON.stringify({copies:store.listBackups(),revision:store.read().revision,updatedAt:store.read().updatedAt,counts:store.counts(store.read().data)}),'application/json',{'Cache-Control':'no-store'});
   if(pathname==='/api/backups'&&req.method==='POST'){try{if(req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)return send(res,403,'{}','application/json');return send(res,200,JSON.stringify(store.makeBackup()),'application/json',{'Cache-Control':'no-store'});}catch(error){return send(res,400,JSON.stringify({error:error.message}),'application/json');}}
   if(pathname.startsWith('/api/backups/')&&req.method==='GET'){try{return send(res,200,JSON.stringify(store.readBackup(decodeURIComponent(pathname.slice('/api/backups/'.length)))),'application/json',{'Cache-Control':'no-store'});}catch{return send(res,404,JSON.stringify({error:'Cópia não disponível.'}),'application/json');}}
@@ -207,7 +212,8 @@ const server = http.createServer(async (req, res) => {
           if(!lot.reversedAt){const copy=JSON.parse(JSON.stringify(prior.data));try{Commercial.reverseEntry(copy,lot.id,'Exclusão',new Date().toISOString());}catch(error){return send(res,400,JSON.stringify({error:error.message}),'application/json');}}
         }
       }
-      const result=store.save(body.data,body.baseRevision,body.baseInstanceId,{allowReset:body.restoreBackup===true});
+      if(body.restoreBackup!==true){const denial=PurchaseAccess.validate(prior.data,body.data,body.purchaseAuthorizations,prior.instanceId,SESSION_SECRET);if(denial)return send(res,denial.status,JSON.stringify({error:denial.error}),'application/json');}
+      const result=store.save(body.data,body.baseRevision,body.baseInstanceId,{allowReset:body.restoreBackup===true||PurchaseAccess.changes(prior.data,body.data).some(c=>c.action==='delete')});
       return send(res,result.status,JSON.stringify(result.state||{error:result.error}),'application/json; charset=utf-8',{'Cache-Control':'no-store'});
     }catch{return send(res,400,'{"error":"Não foi possível salvar os dados."}','application/json');}
   }

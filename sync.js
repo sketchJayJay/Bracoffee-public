@@ -2,6 +2,7 @@
   'use strict';
   const CACHE='bracoffee_db_v1',META='bracoffee_sync_v2',RESCUE='bracoffee_saved_copy_v2',HISTORY='bracoffee_local_copies_v4';
   let revision=0,instanceId='',status='loading',queued=null,busy=false,latest=null,callbacks={},exclusive=false;
+  const purchaseAuthorizations=new Map();
   const readMeta=()=>{try{return JSON.parse(localStorage.getItem(META)||'null');}catch{return null;}};
   const records=data=>['purchases','samples','producers','stockLots','finance','sales','customers','stockGuides','stockMovements'].reduce((sum,key)=>sum+(data?.[key]?.length||0),0);
   const meaningful=data=>records(data)>0||Boolean(data?.settings&&Object.keys(data.settings).length);
@@ -30,7 +31,7 @@
     busy=true;setStatus('saving');
     const snapshot=queued;queued=null;
     try {
-      const result=await request({method:'PUT',body:JSON.stringify({baseRevision:revision,baseInstanceId:instanceId,data:JSON.parse(snapshot)})});
+      const result=await request({method:'PUT',body:JSON.stringify({baseRevision:revision,baseInstanceId:instanceId,data:JSON.parse(snapshot),purchaseAuthorizations:Array.from(purchaseAuthorizations.values()).filter(a=>a.exp>Date.now()).map(a=>a.token)})});
       revision=result.revision;instanceId=result.instanceId;persistMeta(Boolean(queued));
       setStatus(queued?'saving':'saved');
     }catch(error){
@@ -93,7 +94,7 @@
       revision=result.revision;instanceId=result.instanceId;queued=null;cache(CACHE,JSON.stringify(data));persistMeta(false);setStatus('saved');callbacks.onRemote?.(data);
     }catch(error){if(error.conflict){setStatus('conflict');callbacks.onConflict?.();}else setStatus(priorStatus);throw error;}finally{busy=false;exclusive=false;}
   }
-  window.BracoffeeSync={connect,queue,commitDeletion,refresh,resolveConflict,localCopies,preserveLocal:reason=>archive(currentLocal(),reason),get remoteSummary(){return latest?{changedBase:latest.instanceId!==instanceId,counts:Object.fromEntries(['purchases','stockLots','sales'].map(k=>[k,latest.data?.[k]?.length||0]))}:null;},get status(){return status;},get canWrite(){return !exclusive&&(status==='saved'||status==='saving');},get rescued(){try{return JSON.parse(localStorage.getItem(RESCUE)||'null');}catch{return null;}},async whenIdle(){for(let n=0;n<50&&(busy||queued)&&status==='saving';n++)await new Promise(r=>setTimeout(r,100));}};
+  window.BracoffeeSync={connect,queue,commitDeletion,refresh,resolveConflict,localCopies,setPurchaseAuthorization:(id,action,permission)=>purchaseAuthorizations.set(id+':'+action,permission),hasPurchaseAuthorization:(id,action)=>Number(purchaseAuthorizations.get(id+':'+action)?.exp||0)>Date.now()+1000,preserveLocal:reason=>archive(currentLocal(),reason),get remoteSummary(){return latest?{changedBase:latest.instanceId!==instanceId,counts:Object.fromEntries(['purchases','stockLots','sales'].map(k=>[k,latest.data?.[k]?.length||0]))}:null;},get status(){return status;},get canWrite(){return !exclusive&&(status==='saved'||status==='saving');},get rescued(){try{return JSON.parse(localStorage.getItem(RESCUE)||'null');}catch{return null;}},async whenIdle(){for(let n=0;n<50&&(busy||queued)&&status==='saving';n++)await new Promise(r=>setTimeout(r,100));}};
   addEventListener('online',()=>void refresh());addEventListener('focus',()=>void refresh());
   setInterval(()=>{if(document.visibilityState==='visible')void refresh();},15000);
 })();

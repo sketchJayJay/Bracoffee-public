@@ -441,7 +441,8 @@
     resetPurchaseForm(); openPurchaseDetail(purchase.id);
   }
 
-  function updatePurchase(id, data) {
+  async function updatePurchase(id, data) {
+    if(!await requirePurchasePermission(id,'edit',true))return;
     const p = db.purchases.find(x => x.id === id); if (!p) return;
     const linked=db.sales.filter(v=>!v.cancelledAt&&!v.reviewPending&&v.source!=='stock'&&v.purchaseId===id);
     if(linked.length&&(data.destination!==p.destination||data.bags<linked.reduce((v,s)=>v+s.bags,0))){toast('Compra vinculada a vendas','Mantenha o tipo e as sacas comprometidas pelas OVs.','error');return;}
@@ -456,7 +457,7 @@
     const prod = upsertProducerFromPurchase(data); p.producerId = prod.id;
     db.stockLots.filter(l => l.purchaseId === id).forEach(l => Object.assign(l,{oc:p.oc,sellerName:p.sellerName,drink:p.drink,cata:p.cata,moisture:p.moisture,classification:p.classification}));
     if (fin) {Object.assign(fin,{person:p.sellerName,amount:p.total,pricePending:p.pricePending,method:p.paymentMethod,dueDate:p.dueDate,date:p.date});reconcileFinance(fin);p.financeId=fin.id;}
-    saveDB(); toast('Compra atualizada', `${p.oc} foi atualizada.`); resetPurchaseForm(); openPurchaseDetail(id);
+    saveDB(); toast('Compra atualizada', `${p.oc} foi atualizada.`); resetPurchaseForm();navigate('compras'); openPurchaseDetail(id);
   }
 
   function renderSamples() {
@@ -527,12 +528,12 @@
     });
     $('#purchaseResults').textContent=`${rows.length} compra(s) · ${num(rows.reduce((s,p)=>s+Number(p.bags||0),0))} sacas · ${money(rows.reduce((s,p)=>s+Number(p.total||0),0))}`;
     $('#purchasesTable').innerHTML=rows.length?rows.slice(0,commercialLimits.purchases).map(p=>`<tr>
-      <td><strong>${esc(p.oc)}</strong></td><td>${esc(p.sellerName)}</td><td>${dateBR(p.date)}</td><td>${num(p.bags)}</td><td>${esc(p.drink)}<small>${esc(destinationLabel(p.destination))}</small></td><td><strong>${p.pricePending?'A fixar':money(p.total)}</strong></td><td>${badge(p.paymentStatus)}</td><td><button class="table-link" data-purchase-open="${p.id}">Abrir ${icon('arrowUpRight')}</button></td>
+      <td><strong>${esc(p.oc)}</strong></td><td>${esc(p.sellerName)}</td><td>${dateBR(p.date)}</td><td>${num(p.bags)}</td><td>${esc(p.drink)}<small>${esc(destinationLabel(p.destination))}</small></td><td><strong>${p.pricePending?'A fixar':money(p.total)}</strong></td><td>${badge(p.paymentStatus)}</td><td><div class="purchase-row-actions"><button class="mini-btn" data-purchase-open="${esc(p.id)}">Abrir ↗</button><button class="mini-btn" data-purchase-edit="${esc(p.id)}">Editar</button><button class="mini-btn purchase-delete-action" data-purchase-delete="${esc(p.id)}">Excluir</button></div></td>
     </tr>`).join(''):`<tr><td colspan="8">${emptyHTML('Nenhuma compra encontrada','Registre uma compra no balcão.')}</td></tr>`;
     $('#purchasesMobile').innerHTML=rows.length?rows.slice(0,commercialLimits.purchases).map(p=>`<div class="purchase-mobile-card">
       <div class="purchase-mobile-top"><div><strong>${esc(p.oc)}</strong><br><small>${esc(p.sellerName)}</small></div>${badge(p.paymentStatus)}</div>
       <div class="purchase-mobile-grid"><div><small>Sacas</small><strong>${num(p.bags)}</strong></div><div><small>Valor</small><strong>${p.pricePending?'A fixar':money(p.total)}</strong></div><div><small>Tipo</small><strong>${esc(destinationLabel(p.destination))}</strong></div><div><small>Data</small><strong>${dateBR(p.date)}</strong></div></div>
-      <button class="mini-btn primary" data-purchase-open="${p.id}">Abrir compra</button></div>`).join(''):emptyHTML('Nenhuma compra encontrada','Registre uma compra no balcão.');
+      <div class="purchase-row-actions"><button class="mini-btn primary" data-purchase-open="${esc(p.id)}">Abrir</button><button class="mini-btn" data-purchase-edit="${esc(p.id)}">Editar</button><button class="mini-btn purchase-delete-action" data-purchase-delete="${esc(p.id)}">Excluir</button></div></div>`).join(''):emptyHTML('Nenhuma compra encontrada','Registre uma compra no balcão.');
     $('#purchasePageControls').innerHTML='';addMoreControl($('#purchasePageControls'),rows.length,'purchases');
   }
 
@@ -582,8 +583,8 @@
     if(open){$('#purchaseDetailModal').showModal();$('#purchaseDetailModal').scrollTop=0;}
   }
 
-  function editPurchase(id) {
-    const p=db.purchases.find(x=>x.id===id); if(!p)return; resetPurchaseForm();
+  async function editPurchase(id) {
+    const p=db.purchases.find(x=>x.id===id); if(!p)return;if(!await requirePurchasePermission(id,'edit'))return; resetPurchaseForm();
     const map={sellerName:p.sellerName,sellerDoc:p.sellerDoc,sellerIE:p.sellerIE,sellerPhone:p.sellerPhone,sellerFarm:p.sellerFarm,sellerAddress:p.sellerAddress,sellerCity:p.sellerCity,purchaseBags:p.bags,purchaseWeight:p.weight,purchasePrice:p.pricePerBag,purchaseNY:p.ny,purchaseUSD:p.usd,purchaseDestination:p.destination||'stock',purchaseExpectedReceipt:p.expectedReceipt,purchaseDrink:p.drink,purchaseCata:p.cata,purchaseMoisture:p.moisture,purchaseClass:p.classification,purchaseSpecies:p.species,purchaseCrop:p.crop,purchaseScreen:p.screen,purchaseSampleRef:p.sampleRef,purchaseNotes:p.notes,purchaseDate:p.date,purchaseTerm:p.purchaseTerm||'cash',purchasePaymentStatus:p.paymentStatus,purchasePaymentMethod:p.paymentMethod,purchaseDueDate:p.dueDate,purchaseDeliveryType:p.deliveryType||'pickup',purchaseDeliveryLocation:p.deliveryLocation};
     Object.entries(map).forEach(([id,val])=>{const el=$(`#${id}`);if(el)el.value=val??'';});
     $('#purchaseFormTitle').textContent='Editar '+p.oc;
@@ -593,10 +594,9 @@
     $('#purchaseForm').dataset.editingId=id;$('#purchaseForm').dataset.sampleId=p.sampleId||''; updatePurchaseCalculations(); updateDeliveryUI(); updateDestinationUI(); updateBrokerUI(); $('#purchaseDetailModal').close(); updatePurchasePriceMode();navigate('balcao'); toast('Editando compra',p.oc);
   }
 
-  function deletePurchase(id) {
-    const p=db.purchases.find(x=>x.id===id); if(!p)return;
+  async function deletePurchase(id) {
+    const p=db.purchases.find(x=>x.id===id); if(!p)return;if(!await requirePurchasePermission(id,'delete'))return;
     if(db.stockLots.some(l=>l.purchaseId===id)||db.sales.some(v=>v.purchaseId===id||(v.allocations||[]).some(a=>db.stockLots.some(l=>l.id===a.lotId&&l.purchaseId===id)))||db.finance.some(f=>f.purchaseId===id&&(f.payments||[]).length)){toast('Compra com histórico','Entradas, vendas e pagamentos precisam permanecer rastreáveis. Corrija a OC pela edição.','error');return;}
-    if(!confirm(`Excluir ${p.oc}? Entradas de estoque, financeiro e saídas ligadas a essa compra também serão removidos.`)) return;
     db.purchases=db.purchases.filter(x=>x.id!==id); db.finance=db.finance.filter(x=>x.purchaseId!==id);
     const lotIds=db.stockLots.filter(l=>l.purchaseId===id).map(l=>l.id); db.stockLots=db.stockLots.filter(l=>l.purchaseId!==id); db.sales=db.sales.filter(s=>!lotIds.includes(s.lotId));
     saveDB(); $('#purchaseDetailModal').close(); toast('Compra excluída',p.oc); activePurchaseId=null;
@@ -945,6 +945,8 @@
       const sb=e.target.closest('[data-sample-buy]');if(sb)sampleToPurchase(sb.dataset.sampleBuy);
       const sd=e.target.closest('[data-sample-delete]');if(sd){const s=db.samples.find(x=>x.id===sd.dataset.sampleDelete);if(s&&confirm(`Excluir a prova de ${s.name}?`)){db.samples=db.samples.filter(x=>x.id!==s.id);saveDB();toast('Prova excluída');}}
       const po=e.target.closest('[data-purchase-open]');if(po){$('#producerProfileModal').close();openPurchaseDetail(po.dataset.purchaseOpen);}
+      const purchaseEdit=e.target.closest('[data-purchase-edit]');if(purchaseEdit)void editPurchase(purchaseEdit.dataset.purchaseEdit);
+      const purchaseDelete=e.target.closest('[data-purchase-delete]');if(purchaseDelete)void deletePurchase(purchaseDelete.dataset.purchaseDelete);
       const io=e.target.closest('[data-invoice-open]');if(io)openInvoice(io.dataset.invoiceOpen);
       const ls=e.target.closest('[data-lot-sell]');if(ls)openSaleModal(ls.dataset.lotSell);
       const sr=e.target.closest('[data-stock-receive]');if(sr)openStockEntryModal(sr.dataset.stockReceive);
@@ -1072,9 +1074,30 @@
   function renderWarehouseGuides(){if(!$('#warehouseGuides'))return;const q=normalize($('#guideSearch').value);const rows=(db.stockGuides||[]).slice().reverse().filter(g=>!q||normalize([g.code,g.lotSnapshot?.lotRef,g.lotSnapshot?.nf,g.warehouse,g.recipient,g.saleRef].join(' ')).includes(q));$('#warehouseGuides').innerHTML=rows.slice(0,commercialLimits.guides).map(g=>`<div class="data-card"><div class="main-info"><strong>${esc(g.code)} · Lote ${esc(g.lotSnapshot?.lotRef||g.lotSnapshot?.oc)}</strong><small>${dateBR(g.date)} · ${esc(g.warehouse)} · ${esc(g.recipient)}</small>${g.cancelledAt?`<span class="badge red">Cancelada</span><small>${esc(g.cancelReason)}</small>`:''}</div><div class="data-meta"><label>Peso / sacas</label><strong>${num(g.weight)} kg · ${num(g.bags)} sc</strong></div><div class="card-actions"><button class="mini-btn" data-guide-print="${esc(g.id)}">Reimprimir guia</button>${g.cancelledAt?'':`<button class="mini-btn" data-guide-cancel="${esc(g.id)}">Cancelar guia</button>`}</div></div>`).join('')||emptyHTML('Nenhuma guia emitida','Escolha um lote do estoque para gerar a instrução ao armazém.');addMoreControl($('#warehouseGuides'),rows.length,'guides');}
   function printWarehouseGuide(g,w){const l=g.lotSnapshot,b=g.company;writeDocument(w,g.code+' - Guia de armazém',documentHeader(g.code,g.date,b,'GUIA DE ARMAZÉM')+`<h2 class="title">GUIA DE ${esc(({retirada:'RETIRADA',transferencia:'TRANSFERÊNCIA',deposito:'ORIENTAÇÃO DE DEPÓSITO'})[g.kind]||'ARMAZÉM')}</h2>${g.cancelledAt?'<h2 class="title">CANCELADA · '+esc(g.cancelReason)+'</h2>':''}`+printSection('Empresa emitente',printBox('Nome / documento',[b.name,b.doc].filter(Boolean).join(' · '))+printBox('Contato',[b.phone,b.email].filter(Boolean).join(' · ')))+printSection('Instrução ao armazém',printBox('Armazém destinatário',g.warehouse)+printBox('Em nome de / documento',[g.recipient,g.recipientDoc].filter(Boolean).join(' · '))+printBox('Destino',g.destination||'Conforme instrução')+printBox('OV / referência',g.saleRef||'Não informada'))+printSection('Identificação do café',printBox('Número do lote',l.lotRef||l.oc)+printBox('Número da nota fiscal',l.nf||'Não informado')+printBox('Qualidade',l.quality||l.drink)+printBox('OC / origem',l.oc)+printBox('Peso líquido autorizado',num(g.weight)+' kg')+printBox('Quantidade equivalente',num(g.bags)+' sacas de 60 kg'))+printSection('Transporte',printBox('Transportador',g.carrier||'A informar')+printBox('Placa / motorista',[g.plate,g.driver].filter(Boolean).join(' · ')||'A informar'))+`<div class="terms"><strong>Instruções</strong><p>${esc(g.notes||'Conferir lote, qualidade e peso antes da movimentação. Comunicar divergências à empresa emitente.')}</p></div><div class="signs"><div class="sign">${esc(b.name)}<br>Autorização da empresa</div><div class="sign">${esc(g.warehouse)}<br>Conferência do armazém</div></div><div class="foot">${esc(g.code)} · Documento de instrução comercial. Não substitui documento fiscal. Emissão não confirma saída física.</div>`,'invoice');}
 
+  let purchasePinRequest=null;
+  function requirePurchasePermission(id,action,reuse=false){
+    if(!window.BracoffeeSync.canWrite){toast('Aguarde a sincronização','Confira a conexão antes de alterar uma compra.','error');return Promise.resolve(false);}
+    if(reuse&&window.BracoffeeSync.hasPurchaseAuthorization(id,action))return Promise.resolve(true);
+    const p=db.purchases.find(p=>p.id===id);if(!p)return Promise.resolve(false);
+    if(purchasePinRequest){toast('Conclua a solicitação de senha');return Promise.resolve(false);}
+    $('#purchasePinForm').reset();$('#purchasePinError').textContent='';$('#purchasePinModal h3').textContent=action==='delete'?'Excluir compra com senha':'Editar compra com senha';$('#purchasePinSummary').textContent=p.oc+' · '+p.sellerName;$('#purchasePinHelp').textContent=action==='delete'?'A exclusão remove esta OC e sua conta a pagar. Compras com entradas, vendas ou pagamentos registrados não podem ser excluídas.':'Informe a senha de edição/exclusão de compras para abrir e alterar esta OC.';$('#purchasePinSubmit').textContent=action==='delete'?'Autorizar exclusão':'Liberar edição';$('#purchasePinSubmit').disabled=false;
+    return new Promise(resolve=>{purchasePinRequest={id,action,resolve};$('#purchasePinModal').showModal();$('#purchasePinPassword').focus();});
+  }
+  function installPurchasePermissionUI(){
+    document.body.insertAdjacentHTML('beforeend',commercialDialog('purchasePinModal','Compra protegida',`<div class="commercial-body"><p class="lot-highlight" id="purchasePinSummary"></p><p class="field-help" id="purchasePinHelp"></p>${inputField('purchasePinPassword','Senha para editar / excluir compras *','password','required inputmode="numeric" autocomplete="off" maxlength="64"')}<p id="purchasePinError" class="purchase-pin-error" role="alert"></p></div>`,'<button type="button" class="ghost-btn" data-close-dialog="purchasePinModal">Cancelar</button><button class="primary-btn" id="purchasePinSubmit">Continuar</button>','purchasePinForm'));
+    $('#purchasePinModal').addEventListener('close',()=>{const pending=purchasePinRequest;purchasePinRequest=null;$('#purchasePinPassword').value='';if(pending)pending.resolve(false);});
+    $('#purchasePinForm').onsubmit=async e=>{
+      e.preventDefault();const pending=purchasePinRequest;if(!pending)return;$('#purchasePinSubmit').disabled=true;$('#purchasePinError').textContent='';
+      try{const response=await fetch('/api/purchase-permission',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pending.id,action:pending.action,password:$('#purchasePinPassword').value})});const permission=await response.json();if(purchasePinRequest!==pending)return;if(!response.ok)throw Error(permission.error||'Não foi possível validar a senha.');window.BracoffeeSync.setPurchaseAuthorization(pending.id,pending.action,permission);purchasePinRequest=null;$('#purchasePinPassword').value='';$('#purchasePinModal').close();pending.resolve(true);}
+      catch(error){if(purchasePinRequest===pending){$('#purchasePinError').textContent=error.message;$('#purchasePinPassword').value='';$('#purchasePinPassword').focus();}}
+      finally{if(purchasePinRequest===pending)$('#purchasePinSubmit').disabled=false;}
+    };
+  }
+
   async function init(){
     installCommercialUI();
     installWarehouseUI();
+    installPurchasePermissionUI();
     hydrateIcons();
     $('#purchaseDate').value=todayISO();
     $('#dashboardMonth').value=todayISO().slice(0,7);$('#financeMonth').value=todayISO().slice(0,7);
@@ -1096,7 +1119,7 @@
     renderAll();
     $('#appLoading').hidden=true;$('#rescueBackupPanel').hidden=!window.BracoffeeSync.rescued;
     if(window.BracoffeeSync.status==='conflict'&&!$('#syncConflictModal').open){window.BracoffeeWorkspaceUI?.describeSyncConflict();$('#syncConflictModal').showModal();}
-    const guard=e=>{const target=e.target;const mutation=(e.type==='submit'&&target.id!=='restoreBackupForm')||(e.type==='click'&&target.closest('[data-sample-delete],[data-producer-delete],[data-location-delete],[data-payment-reverse],#detailDeleteBtn,#saleCancelBtn,#cancelManualFinanceBtn,#purchaseReceiveV3,[data-entry-reverse],[data-delivery-reverse],[data-lot-move],[data-guide-cancel]'));if(mutation&&!window.BracoffeeSync.canWrite){e.preventDefault();e.stopImmediatePropagation();toast('Aguarde para registrar alterações',window.BracoffeeSync.status==='conflict'?'Carregue a versão atual dos dados.':'Confira a conexão e tente novamente.','error');}};
+    const guard=e=>{const target=e.target;const mutation=(e.type==='submit'&&target.id!=='restoreBackupForm')||(e.type==='click'&&target.closest('[data-purchase-edit],[data-purchase-delete],[data-sample-delete],[data-producer-delete],[data-location-delete],[data-payment-reverse],#detailDeleteBtn,#detailEditBtn,#saleCancelBtn,#cancelManualFinanceBtn,#purchaseReceiveV3,[data-entry-reverse],[data-delivery-reverse],[data-lot-move],[data-guide-cancel]'));if(mutation&&!window.BracoffeeSync.canWrite){e.preventDefault();e.stopImmediatePropagation();toast('Aguarde para registrar alterações',window.BracoffeeSync.status==='conflict'?'Carregue a versão atual dos dados.':'Confira a conexão e tente novamente.','error');}};
     ['submit','click','change'].forEach(type=>document.addEventListener(type,guard,true));
     window.dispatchEvent(new Event('bracoffee:ready'));
     if ('serviceWorker' in navigator) {
@@ -1170,7 +1193,7 @@
     $('#saleOrderPrintBtn').onclick=()=>printSaleDocument(false);$('#saleContractBtn').onclick=()=>printSaleDocument(true);$('#saleContractReprintBtn').onclick=()=>printSaleDocument(true,true);
     $('#saleCancelBtn').onclick=()=>{const reason=prompt('Motivo do cancelamento da venda:');if(reason)commercialTry(()=>{C.cancel(db,activeSaleId,reason,new Date().toISOString());saveDB();openSaleDetail(activeSaleId,false);toast('Venda cancelada','Reservas liberadas; histórico mantido.');});};
     $('#dispatchForm').onsubmit=e=>{e.preventDefault();commercialTry(()=>{C.dispatch(db,activeSaleId,{bags:$('#dispatchBags').value,date:$('#dispatchDate').value,nf:$('#dispatchNF').value.trim(),carrier:$('#dispatchCarrier').value.trim(),plate:$('#dispatchPlate').value.trim(),notes:$('#dispatchNotes').value.trim()},uid('delivery'),new Date().toISOString());saveDB();$('#dispatchModal').close();openSaleDetail(activeSaleId,false);toast('Entrega registrada');});};
-    $('#purchaseReceiveV3').onclick=()=>commercialTry(()=>{const p=db.purchases.find(p=>p.id===activePurchaseId);if(!p)return;if(p.destination!=='stock'){if(p.destination==='direct')throw Error('Uma compra direta não entra no estoque. Edite o tipo da compra se a negociação mudou.');if(!confirm('Destinar esta compra futura ao estoque e registrar o recebimento físico?'))return;p.previousDestination='future';p.destination='stock';saveDB();}openStockEntryModal(p.id);});
+    $('#purchaseReceiveV3').onclick=async()=>{const candidate=db.purchases.find(p=>p.id===activePurchaseId);if(candidate?.destination==='future'&&!await requirePurchasePermission(candidate.id,'edit'))return;commercialTry(()=>{const p=db.purchases.find(p=>p.id===activePurchaseId);if(!p)return;if(p.destination!=='stock'){if(p.destination==='direct')throw Error('Uma compra direta não entra no estoque. Edite o tipo da compra se a negociação mudou.');if(!confirm('Destinar esta compra futura ao estoque e registrar o recebimento físico?'))return;p.previousDestination='future';p.destination='stock';saveDB();}openStockEntryModal(p.id);});};
     $('#purchaseNFBtn').onclick=()=>{const p=db.purchases.find(p=>p.id===activePurchaseId);$('#purchaseNFNumber').value=p.nfNumber||'';$('#purchaseNFDate').value=p.nfDate||todayISO();$('#purchaseNFKey').value=p.nfKey||'';$('#purchaseNFNotes').value=p.nfNotes||'';$('#purchaseNFModal').showModal();};
     $('#purchaseNFForm').onsubmit=e=>{e.preventDefault();const p=db.purchases.find(p=>p.id===activePurchaseId);Object.assign(p,{nfNumber:$('#purchaseNFNumber').value.trim(),nfDate:$('#purchaseNFDate').value,nfKey:$('#purchaseNFKey').value.trim(),nfNotes:$('#purchaseNFNotes').value.trim()});saveDB();$('#purchaseNFModal').close();renderPurchaseDetail(p.id,false);toast('Referência fiscal registrada');};
     $('#reportBtn').onclick=printMonthlyReport;$('#exportStockBtn').onclick=exportStockCSV;

@@ -1,4 +1,4 @@
-# BRACOFFEE Office 4.0 — guia da rotina
+# BRACOFFEE Office 4.1 — guia da rotina
 
 ## Começar o dia
 
@@ -62,3 +62,11 @@ Uma mudança inesperada de base ou um servidor vazio gera uma conferência, most
 Em uma base separada, faça uma compra de 20 sacas, receba 600 kg em um lote com NF, venda três sacas, emita uma guia de 180 kg referenciando a OV, confirme uma entrega parcial e um recebimento parcial. Confira a pendência restante, a busca pela NF, os vínculos do lote e o saldo financeiro. Depois recarregue e abra no celular para conferir a persistência.
 
 Para os detalhes das funções anteriores, consulte GUIA_DE_USO.md, que permanece no pacote.
+
+## Editar e excluir diretamente na lista
+
+Em Compras, use Abrir, Editar ou Excluir ao lado de cada OC. No celular, os três botões aparecem no próprio cartão.
+
+Editar e Excluir pedem a senha inicial **4317**. Essa senha é específica das ações de compras; a senha de login continua a mesma. Senha errada mantém a janela aberta e não altera registros. Cancelar fecha a solicitação sem alterar a OC.
+
+Ao salvar a edição, o sistema retorna à lista e abre a ficha atualizada. Se a autorização expirar durante o preenchimento, será solicitada outra senha antes de salvar, conservando os campos preenchidos. Se houver entradas, vendas ou pagamentos vinculados, a exclusão é bloqueada e a edição continua disponível conforme os limites da operação.

@@ -273,3 +273,14 @@ input[readonly]{background:#f2eee5;color:#7b684e}
 #page-dashboard .seal-logo{width:95px;height:97px}
 #page-dashboard .seal-logo img{height:97px}
 @media(max-width:650px){#page-dashboard .hero-copy h2{font-size:25px}#page-dashboard .hero-copy>p:last-of-type{display:none}}
+
+/* Purchase actions are available in the list and on phone cards. */
+.purchase-row-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:162px}
+.purchase-row-actions .mini-btn{font-size:10px;padding:8px 10px;white-space:nowrap}
+.purchase-row-actions .purchase-delete-action{color:#9a553d;border-color:#e7cdbd;background:#fffaf5}
+.purchase-row-actions .purchase-delete-action:hover{background:#f8e9df;border-color:#c8987c}
+.purchase-mobile-card>.purchase-row-actions{margin-top:15px}
+.purchase-pin-error{min-height:18px;font-size:12px;color:#a64f32;line-height:1.6;margin-bottom:0}
+#purchasePinModal{max-width:510px}
+#purchasePinModal input{font-size:18px;letter-spacing:.1em}
+@media(max-width:650px){.purchase-mobile-card .purchase-row-actions{min-width:0}.purchase-mobile-card .purchase-row-actions .mini-btn{flex:1;text-align:center;padding:11px 8px;font-size:12px}}

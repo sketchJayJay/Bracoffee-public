@@ -1,6 +1,14 @@
-# BRACOFFEE Office 4.0
+# BRACOFFEE Office 4.1
 
 Sistema de gestão comercial de café para acompanhar a compra, o recebimento físico por lote, a venda, a entrega e o financeiro. Mantém a marca original e a identidade visual em carvão, creme e bronze, com telas para computador e celular.
+
+## Ações de compras 4.1
+
+Editar e Excluir aparecem diretamente na lista de compras e nos cartões do celular. Essas ações e a edição pela ficha da OC exigem a senha de edição/exclusão, validada no servidor. A senha inicial é **4317**; a senha de login permanece a atual.
+
+Para alterar a senha dessas ações no Coolify, configure `PURCHASE_ACTION_PASSWORD` e faça o redeploy. Se não for definida, o padrão é 4317. Senha errada, cancelamento ou autorização inválida não alteram a compra. A autorização de edição vale por até 30 minutos durante o preenchimento; ao reabrir a edição ou excluir, a senha é solicitada novamente. A senha não integra os registros nem os backups.
+
+Compras com entradas, vendas ou pagamentos não podem ser excluídas; use a edição para corrigi-las. Pagamentos, recebimentos, faturamento e registro da NF continuam com seus fluxos próprios. A restauração completa de backup mantém a senha de login existente.
 
 ## Rotina de trabalho 4.0
 
@@ -58,6 +66,7 @@ node tests/commercial.test.js
 node tests/workspace.test.js
 node tests/persistence.test.js
 node tests/sync.test.js
+node tests/purchase-access.test.js
 ```
 
 O ZIP contém o programa, documentação e testes; não contém base real, dados de demonstração nem senhas de teste. Esta entrega não faz o redeploy automaticamente.

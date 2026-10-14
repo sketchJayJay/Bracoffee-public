@@ -1,4 +1,4 @@
-# Estudo e validação — BRACOFFEE Office 4.0
+# Estudo e validação — BRACOFFEE Office 4.1
 
 ## Objetivo e contexto
 
@@ -66,3 +66,9 @@ Os testes dos cenários descritos passaram. Dados, senhas e capturas de teste n�
 ## Escopo prático
 
 Os próximos ajustes devem vir de exemplos concretos de operação ou de um modelo de documento exigido pelo cliente: uma guia real, uma cláusula específica ou uma regra de arredondamento, por exemplo. A interface entrega caminhos claros e validações; a conferência da base real, dos dados da empresa e das condições negociadas é parte da entrada em produção. Essa distinção evita chamar uma personalização ainda não especificada de defeito do que já está entregue.
+
+## Validação adicional 4.1
+
+Botões Editar/Excluir conferidos na tabela e nos cartões móveis. Senha errada e cancelamento não alteraram a OC; senha correta permitiu editar e excluir uma OC sem movimentações. A ficha também pediu senha. Uma autorização vencida pediu senha novamente antes de gravar sem perder o preenchimento.
+
+Requisições diretas sem autorização, com autorização de outra ação, alterada, vencida ou de outra base foram recusadas. O servidor também bloqueou exclusão de OC com histórico. Pagamentos continuaram funcionando sem a senha de edição de compras. O fluxo comercial completo e seis larguras de tela foram conferidos novamente. A marca e o formato da base foram preservados.

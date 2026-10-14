@@ -1,4 +1,4 @@
-# Atualizar para BRACOFFEE Office 4.0
+# Atualizar para BRACOFFEE Office 4.1
 
 ## Atualização da base já recuperada
 
@@ -63,3 +63,13 @@ Ele mostra se a base e as cópias são legíveis, suas versões e quantidades. N
 Referências oficiais de armazenamento:
 - https://coolify.io/docs/applications/configuration/persistent-storage
 - https://docs.docker.com/engine/storage/volumes/
+
+## Senha das ações na versão 4.1
+
+Substitua também `purchase-access.js`, `server.js`, `sync.js`, `app.js`, `index.html` e `styles.css`. Use o pacote completo.
+
+- Editar/excluir compras: senha inicial **4317**.
+- Login, exclusão de lote e restauração: continuam usando a senha de acesso atual.
+- Para personalizar o PIN de compras, use `PURCHASE_ACTION_PASSWORD` no Coolify. Sem essa variável, o padrão é 4317.
+- Os botões estão na lista, no celular e na ficha da OC. Editar uma compra futura para destinar ao estoque também pede a autorização, pois muda o tipo da OC.
+- Preserve o mesmo domínio, aplicativo e volume. Exporte a base antes do redeploy.
