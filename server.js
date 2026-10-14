@@ -181,6 +181,9 @@ const server = http.createServer(async (req, res) => {
     return acceptsHtml ? redirect(res, '/login') : send(res, 401, 'Não autorizado.');
   }
 
+  if(pathname==='/api/backups'&&req.method==='GET')return send(res,200,JSON.stringify({copies:store.listBackups(),revision:store.read().revision,updatedAt:store.read().updatedAt,counts:store.counts(store.read().data)}),'application/json',{'Cache-Control':'no-store'});
+  if(pathname==='/api/backups'&&req.method==='POST'){try{if(req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)return send(res,403,'{}','application/json');return send(res,200,JSON.stringify(store.makeBackup()),'application/json',{'Cache-Control':'no-store'});}catch(error){return send(res,400,JSON.stringify({error:error.message}),'application/json');}}
+  if(pathname.startsWith('/api/backups/')&&req.method==='GET'){try{return send(res,200,JSON.stringify(store.readBackup(decodeURIComponent(pathname.slice('/api/backups/'.length)))),'application/json',{'Cache-Control':'no-store'});}catch{return send(res,404,JSON.stringify({error:'Cópia não disponível.'}),'application/json');}}
   if (pathname === '/api/data' && req.method === 'GET') {
     const state=store.read();
     if(url.searchParams.get('instanceId')===state.instanceId&&url.searchParams.has('revision')&&Number(url.searchParams.get('revision'))===state.revision)return send(res,304,'','application/json',{'Cache-Control':'no-store'});
@@ -204,14 +207,14 @@ const server = http.createServer(async (req, res) => {
           if(!lot.reversedAt){const copy=JSON.parse(JSON.stringify(prior.data));try{Commercial.reverseEntry(copy,lot.id,'Exclusão',new Date().toISOString());}catch(error){return send(res,400,JSON.stringify({error:error.message}),'application/json');}}
         }
       }
-      const result=store.save(body.data,body.baseRevision,body.baseInstanceId);
+      const result=store.save(body.data,body.baseRevision,body.baseInstanceId,{allowReset:body.restoreBackup===true});
       return send(res,result.status,JSON.stringify(result.state||{error:result.error}),'application/json; charset=utf-8',{'Cache-Control':'no-store'});
     }catch{return send(res,400,'{"error":"Não foi possível salvar os dados."}','application/json');}
   }
   if (pathname.startsWith('/api/')) return send(res,404,'{"error":"Não encontrado."}','application/json');
 
   let requested = pathname === '/' ? '/index.html' : pathname;
-  const publicFiles=['/index.html','/app.js','/commercial-core.js','/sync.js','/styles.css','/manifest.json','/bracoffee_logo.png','/icon-192.png','/icon-512.png'];
+  const publicFiles=['/index.html','/app.js','/commercial-core.js','/workspace-core.js','/workspace-ui.js','/sync.js','/styles.css','/manifest.json','/bracoffee_logo.png','/icon-192.png','/icon-512.png'];
   if(!publicFiles.includes(requested))return send(res,404,'Não encontrado.');
   let filePath = path.resolve(ROOT, '.' + requested);
   if (!filePath.startsWith(path.resolve(ROOT) + path.sep)) return send(res, 403, 'Acesso negado.');

@@ -1,4 +1,4 @@
-# Guia de uso — BRACOFFEE Office 3.1
+# Guia de uso — BRACOFFEE Office 4.0
 
 ## Começar pela configuração
 

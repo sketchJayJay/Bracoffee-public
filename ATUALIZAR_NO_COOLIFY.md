@@ -1,4 +1,8 @@
-# Atualizar para BRACOFFEE Office 3.1
+# Atualizar para BRACOFFEE Office 4.0
+
+## Atualização da base já recuperada
+
+Atualize o MESMO aplicativo. Mantenha o mesmo domínio, as variáveis de acesso e o volume existente. Não crie outro volume para esta atualização. O ZIP contém o programa e não inclui dados para substituir a base.
 
 ## 1. Guardar os dados atuais
 
@@ -6,7 +10,7 @@ No sistema atual, abra **Configurações → Exportar** e guarde o backup JSON. 
 
 ## 2. Atualizar o projeto
 
-Substitua os arquivos pelo conteúdo deste ZIP, incluindo o novo `commercial-core.js` e as atualizações de `app.js`, `sync.js`, `server.js`, `data-store.js`, `index.html` e `styles.css`. Não substitua nem apague o diretório de dados. Mantenha o Dockerfile na raiz e continue usando o mesmo domínio e as variáveis de acesso configuradas no Coolify.
+Substitua os arquivos pelo conteúdo deste ZIP, incluindo `workspace-core.js`, `workspace-ui.js` e `commercial-core.js` e as atualizações de `app.js`, `sync.js`, `server.js`, `data-store.js`, `index.html` e `styles.css`. Não substitua nem apague o diretório de dados. Mantenha o Dockerfile na raiz e continue usando o mesmo domínio e as variáveis de acesso configuradas no Coolify.
 
 ## 3. Configurar o armazenamento persistente
 
@@ -39,3 +43,23 @@ Na entrada do estoque, informe peso, lote, qualidade e armazém. A exclusão exi
 Abra o mesmo endereço, faça login e confira uma OC existente. Computador e celular agora consultam a mesma base. Confirme também que o volume continua associado ao recurso antes de futuros redeploys.
 
 O pacote está pronto para substituir o projeto no Coolify; ele não foi publicado automaticamente.
+
+## 7. Conferência da versão 4.0
+
+Confirme os totais e abra uma OC, um lote, uma venda e um pagamento conhecidos. Teste a busca global por uma NF e use Ver lote para conferir os vínculos. As vendas começam mostrando todo o histórico; os filtros continuam disponíveis.
+
+Abra Configurações → Ver cópias de segurança. Crie uma cópia manual e baixe-a para fora do sistema. Cópias no mesmo volume ajudam a voltar versões, mas não sobrevivem à exclusão desse volume.
+
+Se o servidor apresentar uma base diferente ou inesperadamente vazia, o sistema preserva a cópia deste aparelho e pede conferência. Não cadastre operações nessa situação. Baixe sua cópia, confira o armazenamento e, se necessário, restaure um arquivo confirmado com a senha de acesso. Se a base principal desaparecer e houver backups no diretório, o servidor interrompe a inicialização em vez de criar uma base vazia.
+
+Para diagnóstico no terminal do contêiner, existe um comando somente de leitura:
+
+```bash
+node scripts/inspect-data.js /app/data
+```
+
+Ele mostra se a base e as cópias são legíveis, suas versões e quantidades. Não altera registros nem imprime nomes, documentos ou valores financeiros. Preserve os arquivos antes de qualquer intervenção manual.
+
+Referências oficiais de armazenamento:
+- https://coolify.io/docs/applications/configuration/persistent-storage
+- https://docs.docker.com/engine/storage/volumes/

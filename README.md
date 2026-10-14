@@ -1,6 +1,20 @@
-# BRACOFFEE Office 3.1
+# BRACOFFEE Office 4.0
 
 Sistema de gestão comercial de café para acompanhar a compra, o recebimento físico por lote, a venda, a entrega e o financeiro. Mantém a marca original e a identidade visual em carvão, creme e bronze, com telas para computador e celular.
+
+## Rotina de trabalho 4.0
+
+- Tela inicial com pendências acionáveis: vencimentos de hoje/atrasados, faturamento, recebimentos, entregas, preço a fixar e conferência de histórico.
+- Atalhos para comprar, receber, vender, emitir guias e acertar valores.
+- Compra guiada em três passos, com validação por etapa, formulário completo opcional e rascunho recuperável neste aparelho.
+- Busca global por OC, OV, lote, NF, guia, fornecedor, cliente e conta, em qualquer período; atalho Ctrl+K / Cmd+K.
+- Ficha do lote ligando compra de origem, vendas, guias e histórico de correções; navegação recíproca nas OCs, OVs e guias.
+- Ajuda por rotina, limpeza clara dos filtros e formulários de correção com motivo.
+- Guia com destinatário preenchido pela OV, aviso de autorizações anteriores e acesso à venda/lote relacionados.
+- Tela de cópias de segurança com download das versões do servidor e deste aparelho. Até 30 cópias diárias em dias com alterações, dez versões recentes e dez cópias manuais no mesmo armazenamento.
+- Proteção contra mudança inesperada de base e substituição vazia, com conferência das quantidades e restauração autorizada por senha.
+
+Consulte **ESTUDO_E_VALIDACAO.md** para as decisões e verificações; **GUIA_DA_ROTINA_4.md** apresenta o uso da nova interface.
 
 ## O que está incluído
 
@@ -17,7 +31,7 @@ Sistema de gestão comercial de café para acompanhar a compra, o recebimento f�
 - Lançamentos financeiros avulsos para corretagem, frete, armazenagem e outras despesas/receitas.
 - Fichas e histórico de fornecedores e clientes; identificação das amostras por espécie, safra, peneira e referência.
 - Estoque inicial, movimentações, exportação CSV, relatório financeiro e backup JSON.
-- Busca em toda a base, listas paginadas, sincronização entre aparelhos, bloqueio de conflitos e dez versões anteriores no servidor.
+- Busca em toda a base, listas paginadas, sincronização entre aparelhos, bloqueio de conflitos e cópias diárias, manuais e versões anteriores no servidor.
 
 Corretagem não é adicionada automaticamente ao preço do café. Use lançamento financeiro avulso quando houver uma obrigação de comissão a registrar.
 
@@ -41,6 +55,9 @@ O programa prepara documentos comerciais; a nota fiscal continua sendo emitida p
 
 ```bash
 node tests/commercial.test.js
+node tests/workspace.test.js
+node tests/persistence.test.js
+node tests/sync.test.js
 ```
 
 O ZIP contém o programa, documentação e testes; não contém base real, dados de demonstração nem senhas de teste. Esta entrega não faz o redeploy automaticamente.
